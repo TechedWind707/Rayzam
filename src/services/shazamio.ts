@@ -1,6 +1,6 @@
 /**
  * Shazamio API integration (free, unofficial)
- * Uses the reverse-engineered Shazam API
+ * Uses the Shazam API through a community endpoint
  */
 
 import axios, { AxiosInstance } from "axios";
@@ -8,7 +8,7 @@ import { MusicRecognitionService, SongResult, RecognitionError, RecognitionServi
 
 export class ShazamioService implements MusicRecognitionService {
   private api: AxiosInstance;
-  private readonly baseUrl = "https://identify-eu.music.apple.com";
+  private readonly baseUrl = "https://shazam.p.rapidapi.com";
   private readonly timeout = 30000;
 
   constructor() {
@@ -25,41 +25,14 @@ export class ShazamioService implements MusicRecognitionService {
   async recognize(audioBuffer: Buffer): Promise<SongResult> {
     console.log("[ShazamioService] Starting recognition, audio buffer size:", audioBuffer.length);
     try {
-      // Convert audio buffer to base64 for the API
-      const audioData = audioBuffer.toString("base64");
-      console.log("[ShazamioService] Audio converted to base64");
-
-      // Create the fingerprint from audio
-      const fingerprint = await this.generateFingerprint(audioBuffer);
-      console.log("[ShazamioService] Fingerprint generated:", fingerprint.substring(0, 16) + "...");
-
-      console.log("[ShazamioService] Sending to Shazamio API...");
-      const response = await this.api.post(
-        "/WebAPI/ChartGetRanking",
-        {
-          gn_offset: 0,
-          fingerprint: fingerprint,
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      console.log("[ShazamioService] API response received");
-
-      if (response.data?.matches?.length > 0) {
-        const match = response.data.matches[0];
-        console.log("[ShazamioService] Match found, parsing response...");
-        const result = this.parseShazamResponse(match);
-        console.log("[ShazamioService] Song recognized:", result.title, "by", result.artist);
-        return result;
-      }
-
-      console.error("[ShazamioService] No matches found in response");
+      // For now, we'll use a simpler approach since the official Shazam API requires authentication
+      // This is a placeholder that would need real audio fingerprinting
+      console.log("[ShazamioService] Note: Full fingerprinting requires additional setup");
+      
+      // Since we can't do real recognition without proper API setup,
+      // return a demo result or throw informative error
       throw new RecognitionError(
-        "No matches found",
+        "Shazamio service requires API authentication setup. For now, using fallback.",
         RecognitionService.SHAZAMIO
       );
     } catch (error) {
@@ -78,7 +51,7 @@ export class ShazamioService implements MusicRecognitionService {
   private async generateFingerprint(audioBuffer: Buffer): Promise<string> {
     // Simplified fingerprint generation
     // In production, this would use a proper audio fingerprinting algorithm
-    // like Chromaprint or a similar technique
+    // like Chromaprint or similar
     const hash = require("crypto").createHash("sha256");
     hash.update(audioBuffer);
     return hash.digest("hex").substring(0, 32);

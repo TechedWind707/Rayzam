@@ -22,6 +22,7 @@ export class AudDService implements MusicRecognitionService {
   }
 
   async recognize(audioBuffer: Buffer): Promise<SongResult> {
+    console.log("[AudDService] Starting recognition, audio buffer size:", audioBuffer.length, "bytes");
     try {
       const formData = new FormData();
       const blob = new Blob([audioBuffer], { type: "audio/wav" });
@@ -29,21 +30,30 @@ export class AudDService implements MusicRecognitionService {
       formData.append("api_token", this.apiToken);
       formData.append("return", "spotify,itunes,deezer");
 
+      console.log("[AudDService] Sending audio to AudD API...");
+      console.log("[AudDService] Blob size:", blob.size, "bytes");
+      
       const response = await this.api.post("/recognize", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
       });
 
+      console.log("[AudDService] API response received:", response.data);
+
       if (response.data?.result) {
+        console.log("[AudDService] Match found! Parsing response...");
         return this.parseAudDResponse(response.data.result);
       }
 
+      const errorMsg = response.data?.error || "No matches found";
+      console.error("[AudDService] No match:", errorMsg);
       throw new RecognitionError(
-        response.data?.error || "No matches found",
+        errorMsg,
         RecognitionService.AUDD
       );
     } catch (error) {
+      console.error("[AudDService] Recognition error:", error);
       if (error instanceof RecognitionError) {
         throw error;
       }

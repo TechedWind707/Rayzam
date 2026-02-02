@@ -1,60 +1,66 @@
 /**
- * JSON file-based storage for song history
+ * JSON-based storage for song history using Raycast's storage API
  */
 
-import * as path from "path";
-import * as os from "os";
-import * as fs from "fs";
 import { v4 as uuidv4 } from "uuid";
+import { LocalStorage } from "@raycast/api";
 import { HistoryEntry } from "../services/types";
 
+const STORAGE_KEY = "songsnap_history";
+
 export class HistoryDatabase {
-  private dbPath: string;
   private entries: HistoryEntry[] = [];
+  private loadPromise: Promise<void>;
 
   constructor() {
-    const dbDir = path.join(os.homedir(), ".config", "songsnap");
-    this.dbPath = path.join(dbDir, "history.json");
-    this.ensureDbDir();
-    this.loadEntries();
+    this.loadPromise = this.loadEntries();
   }
 
-  private ensureDbDir(): void {
-    const dir = path.dirname(this.dbPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-  }
-
-  private loadEntries(): void {
+  private async loadEntries(): Promise<void> {
     try {
-      if (fs.existsSync(this.dbPath)) {
-        const data = fs.readFileSync(this.dbPath, "utf-8");
-        this.entries = JSON.parse(data);
+      const storedData = await LocalStorage.getItem(STORAGE_KEY);
+      if (storedData && typeof storedData === "string") {
+        this.entries = JSON.parse(storedData);
+        console.log("[HistoryDatabase] Loaded", this.entries.length, "entries from Raycast storage");
       } else {
         this.entries = [];
+        console.log("[HistoryDatabase] No existing history found");
       }
-    } catch {
+    } catch (err) {
+      console.error("[HistoryDatabase] Failed to load history:", err);
       this.entries = [];
     }
   }
 
-  private saveEntries(): void {
+  private async ensureLoaded(): Promise<void> {
+    await this.loadPromise;
+  }
+
+  private async saveEntries(): Promise<void> {
     try {
-      console.log("[HistoryDatabase] Saving", this.entries.length, "entries to disk...");
-      fs.writeFileSync(this.dbPath, JSON.stringify(this.entries, null, 2), "utf-8");
-      console.log("[HistoryDatabase] Successfully saved to:", this.dbPath);
+      console.log("[HistoryDatabase] Saving", this.entries.length, "entries to Raycast storage...");
+      await LocalStorage.setItem(STORAGE_KEY, JSON.stringify(this.entries));
+      console.log("[HistoryDatabase] Successfully saved to Raycast storage");
     } catch (err) {
       console.error("[HistoryDatabase] Failed to save history:", err);
     }
   }
 
-  addSong(entry: Omit<HistoryEntry, "id">): HistoryEntry {
-    console.log("[HistoryDatabase] Adding song to history:", entry.title, "by", entry.artist);
-    const id = uuidv4();
-    const newEntry: HistoryEntry = { id, ...entry };
+  async addSong(title: string, artist: string, options: Partial<HistoryEntry> = {}): Promise<HistoryEntry> {
+    // Ensure data is loaded
+    await this.ensureLoaded();
+    
+    const newEntry: HistoryEntry = {
+      id: uuidv4(),
+      title,
+      artist,
+      timestamp: Date.now(),
+      ...options,
+    };
+
+    console.log("[HistoryDatabase] Adding song to history:", title, "by", artist);
     this.entries.unshift(newEntry);
-    console.log("[HistoryDatabase] Entry added with ID:", id);
+    console.log("[HistoryDatabase] Entry added with ID:", newEntry.id);
     
     // Keep only last 500 songs
     if (this.entries.length > 500) {
@@ -62,30 +68,33 @@ export class HistoryDatabase {
       this.entries = this.entries.slice(0, 500);
     }
     
-    this.saveEntries();
+    await this.saveEntries();
     return newEntry;
   }
 
-  getRecent(limit: number = 50): HistoryEntry[] {
+  async getRecent(limit: number = 50): Promise<HistoryEntry[]> {
+    await this.ensureLoaded();
     return this.entries.slice(0, limit);
   }
 
-  searchByTitle(query: string, limit: number = 50): HistoryEntry[] {
+  async searchByTitle(query: string, limit: number = 50): Promise<HistoryEntry[]> {
+    await this.ensureLoaded();
     const lower = query.toLowerCase();
     return this.entries
       .filter((e) => e.title.toLowerCase().includes(lower) || e.artist.toLowerCase().includes(lower))
       .slice(0, limit);
   }
 
-  getByDateRange(startTime: number, endTime: number): HistoryEntry[] {
+  async getByDateRange(startTime: number, endTime: number): Promise<HistoryEntry[]> {
+    await this.ensureLoaded();
     return this.entries.filter((e) => e.timestamp >= startTime && e.timestamp <= endTime);
   }
 
-  deleteSong(id: string): boolean {
+  async deleteSong(id: string): Promise<boolean> {
     const idx = this.entries.findIndex((e) => e.id === id);
     if (idx >= 0) {
       this.entries.splice(idx, 1);
-      this.saveEntries();
+      await this.saveEntries();
       return true;
     }
     return false;
@@ -118,7 +127,7 @@ export class HistoryDatabase {
   }
 
   close(): void {
-    // No-op for JSON storage
+    // No-op for Raycast storage
   }
 
   private escapeCsv(value: string): string {

@@ -15,10 +15,62 @@ const execAsync = promisify(exec);
 export class AudioRecorder {
   private platform: string;
   private tempDir: string;
+  private cachedAudioDevice: string | null = null;
 
   constructor() {
     this.platform = process.platform;
     this.tempDir = os.tmpdir();
+  }
+
+  /**
+   * Auto-detect available audio input devices on Windows
+   */
+  private async detectWindowsAudioDevice(): Promise<string> {
+    // Return cached device if already found
+    if (this.cachedAudioDevice) {
+      console.log("[AudioRecorder] Using cached audio device:", this.cachedAudioDevice);
+      return this.cachedAudioDevice;
+    }
+
+    console.log("[AudioRecorder] Detecting available audio devices...");
+    try {
+      const { stdout, stderr } = await execAsync(`ffmpeg -list_devices true -f dshow -i dummy 2>&1`, {
+        shell: true,
+        maxBuffer: 10 * 1024 * 1024, // 10MB buffer for device list
+      });
+      
+      const output = stdout + stderr;
+      const audioDevices: string[] = [];
+      
+      // Parse ffmpeg output to find audio devices
+      // Format: [dshow @ ...] "Device Name" (audio)
+      const matches = output.match(/"([^"]+)"\s*\(audio\)/g);
+      
+      if (matches) {
+        for (const match of matches) {
+          // Extract device name from "Device Name" (audio)
+          const deviceName = match.match(/"([^"]+)"/)?.[1];
+          if (deviceName) {
+            audioDevices.push(deviceName);
+            console.log("[AudioRecorder] Found audio device:", deviceName);
+          }
+        }
+      }
+      
+      if (audioDevices.length === 0) {
+        throw new Error("No audio input devices found. Please check your audio settings.");
+      }
+      
+      // Use the first available device
+      this.cachedAudioDevice = audioDevices[0];
+      console.log("[AudioRecorder] Selected audio device:", this.cachedAudioDevice);
+      return this.cachedAudioDevice;
+    } catch (err) {
+      console.error("[AudioRecorder] Failed to detect audio devices:", err);
+      // Fallback: try generic device names
+      console.log("[AudioRecorder] Falling back to generic device names...");
+      return "Microphone";
+    }
   }
 
   /**
@@ -48,6 +100,20 @@ export class AudioRecorder {
       // Read the audio file
       const audioBuffer = await fs.promises.readFile(audioFile);
       console.log("[AudioRecorder] Audio file read successfully, size:", audioBuffer.length, "bytes");
+      
+      // Save a debug copy for user inspection
+      try {
+        const debugDir = path.join(os.homedir(), "songsnap-debug");
+        if (!fs.existsSync(debugDir)) {
+          fs.mkdirSync(debugDir, { recursive: true });
+        }
+        const debugFile = path.join(debugDir, `songsnap-${Date.now()}.wav`);
+        await fs.promises.copyFile(audioFile, debugFile);
+        console.log("[AudioRecorder] ✓ DEBUG: Saved audio copy to:", debugFile);
+        console.log("[AudioRecorder] ✓ DEBUG: You can listen to this file to verify audio is being captured");
+      } catch (debugErr) {
+        console.warn("[AudioRecorder] Failed to save debug copy:", debugErr);
+      }
       
       // Clean up temp file
       await fs.promises.unlink(audioFile).catch((err) => {
@@ -87,9 +153,18 @@ export class AudioRecorder {
   private async recordWindows(outputFile: string, duration: number): Promise<void> {
     // Windows: use ffmpeg with dshow (DirectShow)
     console.log("[AudioRecorder] Recording on Windows with ffmpeg...");
-    const cmd = `ffmpeg -f dshow -i audio="Microphone" -t ${duration} "${outputFile}" -y`;
+    // Escape backslashes in path for Windows
+    const escapedPath = outputFile.replace(/\\/g, "\\\\");
+    
+    // Auto-detect the audio device
+    const audioDevice = await this.detectWindowsAudioDevice();
+    console.log("[AudioRecorder] Using audio device:", audioDevice);
+    
+    // Use better audio codec for recognition: PCM 16-bit 44.1kHz mono
+    // This is the most compatible format for music recognition APIs
+    const cmd = `ffmpeg -f dshow -i audio="${audioDevice}" -t ${duration} -acodec pcm_s16le -ar 44100 -ac 1 -y "${escapedPath}"`;
     console.log("[AudioRecorder] Executing command:", cmd);
-    await execAsync(cmd, { timeout: (duration + 5) * 1000 });
+    await execAsync(cmd, { timeout: (duration + 5) * 1000, shell: true, maxBuffer: 10 * 1024 * 1024 });
     console.log("[AudioRecorder] Windows recording successful");
   }
 
