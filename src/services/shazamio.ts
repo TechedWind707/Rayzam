@@ -74,17 +74,17 @@ export class ShazamioService implements MusicRecognitionService {
   }
 
   private parseShazamResponse(match: Record<string, unknown>): SongResult {
-    const metadata = match.metadata as Record<string, unknown>;
+    const metadata = (match.metadata || {}) as Record<string, unknown>;
 
     return {
-      title: (metadata?.title as string) || "Unknown",
-      artist: (metadata?.artists?.[0]?.name as string) || "Unknown Artist",
-      album: (metadata?.album?.name as string) || undefined,
-      releaseYear: metadata?.releaseDate
+      title: (metadata.title as string) || "Unknown",
+      artist: (Array.isArray(metadata.artists) ? (metadata.artists[0] as any)?.name : undefined) || "Unknown Artist",
+      album: ((metadata.album as any)?.name as string) || undefined,
+      releaseYear: metadata.releaseDate
         ? new Date(metadata.releaseDate as string).getFullYear()
         : undefined,
-      albumArtUrl: (metadata?.artwork?.url as string) || undefined,
-      isrc: (metadata?.isrc as string) || undefined,
+      albumArtUrl: ((metadata.artwork as any)?.url as string) || undefined,
+      isrc: (metadata.isrc as string) || undefined,
       confidence: (match.score as number) || undefined,
       rawData: match,
     };
