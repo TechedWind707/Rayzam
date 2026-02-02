@@ -2,7 +2,7 @@
   "name": "raycast-songsnap",
   "title": "SongSnap - Shazam for Raycast",
   "description": "Music recognition extension for Raycast. Identify songs instantly without leaving your workflow.",
-  "icon": "icon.png",
+  "icon": "assets/icon.png",
   "author": "SongSnap Team",
   "license": "MIT",
   "commands": [
