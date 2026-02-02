@@ -41,20 +41,27 @@ export class HistoryDatabase {
 
   private saveEntries(): void {
     try {
+      console.log("[HistoryDatabase] Saving", this.entries.length, "entries to disk...");
       fs.writeFileSync(this.dbPath, JSON.stringify(this.entries, null, 2), "utf-8");
+      console.log("[HistoryDatabase] Successfully saved to:", this.dbPath);
     } catch (err) {
-      console.error("Failed to save history:", err);
+      console.error("[HistoryDatabase] Failed to save history:", err);
     }
   }
 
   addSong(entry: Omit<HistoryEntry, "id">): HistoryEntry {
+    console.log("[HistoryDatabase] Adding song to history:", entry.title, "by", entry.artist);
     const id = uuidv4();
     const newEntry: HistoryEntry = { id, ...entry };
     this.entries.unshift(newEntry);
+    console.log("[HistoryDatabase] Entry added with ID:', id);
+    
     // Keep only last 500 songs
     if (this.entries.length > 500) {
+      console.log("[HistoryDatabase] Trimming history to 500 songs (current:', this.entries.length, ")");
       this.entries = this.entries.slice(0, 500);
     }
+    
     this.saveEntries();
     return newEntry;
   }

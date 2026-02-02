@@ -26,24 +26,37 @@ export class AudioRecorder {
    */
   async recordAudio(duration: number = 5): Promise<Buffer> {
     const audioFile = path.join(this.tempDir, `songsnap-${Date.now()}.wav`);
+    console.log("[AudioRecorder] Starting recording for", duration, "seconds");
+    console.log("[AudioRecorder] Platform:", this.platform);
+    console.log("[AudioRecorder] Output file:", audioFile);
 
     try {
       if (this.platform === "darwin") {
+        console.log("[AudioRecorder] Using macOS recording mode");
         await this.recordMacOS(audioFile, duration);
       } else if (this.platform === "win32") {
+        console.log("[AudioRecorder] Using Windows recording mode");
         await this.recordWindows(audioFile, duration);
       } else if (this.platform === "linux") {
+        console.log("[AudioRecorder] Using Linux recording mode");
         await this.recordLinux(audioFile, duration);
       } else {
         throw new AudioRecordingError(`Unsupported platform: ${this.platform}`);
       }
 
+      console.log("[AudioRecorder] Recording completed, reading file...");
       // Read the audio file
       const audioBuffer = await fs.promises.readFile(audioFile);
+      console.log("[AudioRecorder] Audio file read successfully, size:", audioBuffer.length, "bytes");
+      
       // Clean up temp file
-      await fs.promises.unlink(audioFile).catch(() => {});
+      await fs.promises.unlink(audioFile).catch((err) => {
+        console.warn("[AudioRecorder] Failed to clean up temp file:", err);
+      });
+      
       return audioBuffer;
     } catch (error) {
+      console.error("[AudioRecorder] Recording error:", error);
       // Clean up on error
       await fs.promises.unlink(audioFile).catch(() => {});
       throw new AudioRecordingError(
@@ -55,41 +68,46 @@ export class AudioRecorder {
 
   private async recordMacOS(outputFile: string, duration: number): Promise<void> {
     // Try sox first, fall back to ffmpeg
+    console.log("[AudioRecorder] Attempting sox recording...");
     try {
-      await execAsync(
-        `sox -d -t wav "${outputFile}" trim 0 ${duration}`,
-        { timeout: (duration + 5) * 1000 }
-      );
-    } catch {
+      const cmd = `sox -d -t wav "${outputFile}" trim 0 ${duration}`;
+      console.log("[AudioRecorder] Executing command:", cmd);
+      await execAsync(cmd, { timeout: (duration + 5) * 1000 });
+      console.log("[AudioRecorder] Sox recording successful");
+    } catch (err) {
       // Fall back to ffmpeg
-      await execAsync(
-        `ffmpeg -f avfoundation -i ":default" -t ${duration} "${outputFile}" -y`,
-        { timeout: (duration + 5) * 1000 }
-      );
+      console.log("[AudioRecorder] Sox failed, trying ffmpeg...");
+      const cmd = `ffmpeg -f avfoundation -i ":default" -t ${duration} "${outputFile}" -y`;
+      console.log("[AudioRecorder] Executing ffmpeg command:", cmd);
+      await execAsync(cmd, { timeout: (duration + 5) * 1000 });
+      console.log("[AudioRecorder] FFmpeg recording successful");
     }
   }
 
   private async recordWindows(outputFile: string, duration: number): Promise<void> {
     // Windows: use ffmpeg with dshow (DirectShow)
-    await execAsync(
-      `ffmpeg -f dshow -i audio="Microphone" -t ${duration} "${outputFile}" -y`,
-      { timeout: (duration + 5) * 1000 }
-    );
+    console.log("[AudioRecorder] Recording on Windows with ffmpeg...");
+    const cmd = `ffmpeg -f dshow -i audio="Microphone" -t ${duration} "${outputFile}" -y`;
+    console.log("[AudioRecorder] Executing command:", cmd);
+    await execAsync(cmd, { timeout: (duration + 5) * 1000 });
+    console.log("[AudioRecorder] Windows recording successful");
   }
 
   private async recordLinux(outputFile: string, duration: number): Promise<void> {
     // Linux: use ffmpeg with pulse audio or alsa
+    console.log("[AudioRecorder] Attempting pulse audio recording...");
     try {
-      await execAsync(
-        `ffmpeg -f pulse -i default -t ${duration} "${outputFile}" -y`,
-        { timeout: (duration + 5) * 1000 }
-      );
+      const cmd = `ffmpeg -f pulse -i default -t ${duration} "${outputFile}" -y`;
+      console.log("[AudioRecorder] Executing command:", cmd);
+      await execAsync(cmd, { timeout: (duration + 5) * 1000 });
+      console.log("[AudioRecorder] Pulse audio recording successful");
     } catch {
       // Fall back to ALSA
-      await execAsync(
-        `ffmpeg -f alsa -i default -t ${duration} "${outputFile}" -y`,
-        { timeout: (duration + 5) * 1000 }
-      );
+      console.log("[AudioRecorder] Pulse failed, trying ALSA...");
+      const cmd = `ffmpeg -f alsa -i default -t ${duration} "${outputFile}" -y`;
+      console.log("[AudioRecorder] Executing ALSA command:", cmd);
+      await execAsync(cmd, { timeout: (duration + 5) * 1000 });
+      console.log("[AudioRecorder] ALSA recording successful");
     }
   }
 }

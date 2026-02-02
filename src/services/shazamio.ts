@@ -23,13 +23,17 @@ export class ShazamioService implements MusicRecognitionService {
   }
 
   async recognize(audioBuffer: Buffer): Promise<SongResult> {
+    console.log("[ShazamioService] Starting recognition, audio buffer size:", audioBuffer.length);
     try {
       // Convert audio buffer to base64 for the API
       const audioData = audioBuffer.toString("base64");
+      console.log("[ShazamioService] Audio converted to base64");
 
       // Create the fingerprint from audio
       const fingerprint = await this.generateFingerprint(audioBuffer);
+      console.log("[ShazamioService] Fingerprint generated:", fingerprint.substring(0, 16) + "...");
 
+      console.log("[ShazamioService] Sending to Shazamio API...");
       const response = await this.api.post(
         "/WebAPI/ChartGetRanking",
         {
@@ -43,16 +47,23 @@ export class ShazamioService implements MusicRecognitionService {
         }
       );
 
+      console.log("[ShazamioService] API response received");
+
       if (response.data?.matches?.length > 0) {
         const match = response.data.matches[0];
-        return this.parseShazamResponse(match);
+        console.log("[ShazamioService] Match found, parsing response...");
+        const result = this.parseShazamResponse(match);
+        console.log("[ShazamioService] Song recognized:", result.title, "by", result.artist);
+        return result;
       }
 
+      console.error("[ShazamioService] No matches found in response");
       throw new RecognitionError(
         "No matches found",
         RecognitionService.SHAZAMIO
       );
     } catch (error) {
+      console.error("[ShazamioService] Recognition error:", error);
       if (error instanceof RecognitionError) {
         throw error;
       }

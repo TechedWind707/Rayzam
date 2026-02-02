@@ -26,18 +26,27 @@ export default function IdentifySongCommand() {
   const [recording, setRecording] = useState(true);
 
   useEffect(() => {
+    console.log("[SongSnap] Command initialized, starting identification...");
     identifySong();
   }, []);
 
   async function identifySong(): Promise<void> {
     try {
+      console.log("[SongSnap] Step 1: Getting preferences...");
       const prefs = getPreferences();
+      console.log("[SongSnap] Preferences loaded:", {
+        service: prefs.recognitionService,
+        duration: prefs.recordingDuration,
+      });
+
       const validationError = validatePreferences(prefs);
 
       if (validationError) {
+        console.error("[SongSnap] Preference validation failed:", validationError);
         throw new Error(validationError);
       }
 
+      console.log("[SongSnap] Step 2: Starting audio recording...");
       setRecording(true);
       await showToast({
         style: Toast.Style.Animated,
@@ -46,15 +55,19 @@ export default function IdentifySongCommand() {
       });
 
       const recorder = new AudioRecorder();
+      console.log("[SongSnap] AudioRecorder created, recording for", prefs.recordingDuration, "seconds");
       const audioBuffer = await recorder.recordAudio(prefs.recordingDuration);
 
+      console.log("[SongSnap] Audio recorded successfully, buffer size:", audioBuffer.length, "bytes");
       setRecording(false);
+      
       await showToast({
         style: Toast.Style.Animated,
         title: "🔍 Identifying...",
         message: "Sending to recognition service",
       });
 
+      console.log("[SongSnap] Step 3: Creating recognition service...");
       const service = ServiceFactory.createService({
         service: prefs.recognitionService,
         acrcloudAccessKey: prefs.acrcloudAccessKey,
@@ -62,12 +75,21 @@ export default function IdentifySongCommand() {
         auddApiToken: prefs.auddApiToken,
       });
 
+      console.log("[SongSnap] Service created:", prefs.recognitionService);
+      console.log("[SongSnap] Step 4: Sending audio to recognition service...");
       const result = await service.recognize(audioBuffer);
+
+      console.log("[SongSnap] Song recognized:", {
+        title: result.title,
+        artist: result.artist,
+        confidence: result.confidence,
+      });
       setSong(result);
 
       // Save to history
+      console.log("[SongSnap] Step 5: Saving to history database...");
       const db = new HistoryDatabase();
-      db.addSong({
+      const historyEntry = db.addSong({
         title: result.title,
         artist: result.artist,
         album: result.album,
@@ -78,21 +100,31 @@ export default function IdentifySongCommand() {
       });
       db.close();
 
+      console.log("[SongSnap] Song saved to history with ID:", historyEntry.id);
+
       await showToast({
         style: Toast.Style.Success,
         title: "✓ Song identified!",
         message: `${result.title} by ${result.artist}`,
       });
 
+      console.log("[SongSnap] Identification complete!");
       setLoading(false);
     } catch (err) {
       let errorMessage = "Unknown error occurred";
+      let errorDetails = "";
 
       if (err instanceof RecognitionError) {
         errorMessage = `${err.service}: ${err.message}`;
+        errorDetails = err.originalError?.message || "";
       } else if (err instanceof Error) {
         errorMessage = err.message;
+        errorDetails = err.stack || "";
       }
+
+      console.error("[SongSnap] ERROR during identification:", errorMessage);
+      console.error("[SongSnap] Error details:", errorDetails);
+      console.error("[SongSnap] Full error object:", err);
 
       setError(errorMessage);
       setLoading(false);
