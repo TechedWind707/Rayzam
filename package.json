@@ -11,14 +11,16 @@
       "title": "Identify Song",
       "description": "Record audio and identify the currently playing song",
       "mode": "view",
-      "icon": "assets/extension-icon.png"
+      "icon": "assets/extension-icon.png",
+      "entrypoint": "dist/commands/identify-song.js"
     },
     {
       "name": "song-history",
       "title": "Song History",
       "description": "Browse your song identification history",
       "mode": "view",
-      "icon": "assets/extension-icon.png"
+      "icon": "assets/extension-icon.png",
+      "entrypoint": "dist/commands/song-history.js"
     }
   ],
   "preferences": [

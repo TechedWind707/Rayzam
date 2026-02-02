@@ -54,11 +54,11 @@ export class HistoryDatabase {
     const id = uuidv4();
     const newEntry: HistoryEntry = { id, ...entry };
     this.entries.unshift(newEntry);
-    console.log("[HistoryDatabase] Entry added with ID:', id);
+    console.log("[HistoryDatabase] Entry added with ID:", id);
     
     // Keep only last 500 songs
     if (this.entries.length > 500) {
-      console.log("[HistoryDatabase] Trimming history to 500 songs (current:', this.entries.length, ")");
+      console.log("[HistoryDatabase] Trimming history to 500 songs (current:", this.entries.length, ")");
       this.entries = this.entries.slice(0, 500);
     }
     
