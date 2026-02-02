@@ -274,10 +274,22 @@ These permissions are necessary for functionality and requested at first use.
 - For ACRCloud: check if trial is still active
 - For AudD: verify account has remaining credits
 
+### "Failed to load command User cancelled"
+See **[DEBUGGING.md](./DEBUGGING.md)** for detailed troubleshooting steps and how to read logs.
+
 ### History not saving
 - Check folder permissions: `~/.config/songsnap/`
 - Ensure disk has free space
 - Try deleting old history and starting fresh
+
+## 📖 Debugging & Logs
+
+**[See DEBUGGING.md](./DEBUGGING.md)** for:
+- How to view logs in Raycast
+- Common errors and solutions
+- Platform-specific troubleshooting
+- Performance debugging
+- Advanced troubleshooting techniques
 
 ## 📈 Performance
 
