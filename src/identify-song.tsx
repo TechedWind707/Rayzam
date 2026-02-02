@@ -5,7 +5,7 @@
 
 import React from "react";
 import { Detail, ActionPanel, Action, Icon, Toast, showToast, showHUD } from "@raycast/api";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AudioRecorder } from "./services/recorder";
 import { ServiceFactory } from "./services";
 import { SongResult, RecognitionError, RecognitionService } from "./services/types";
@@ -24,14 +24,22 @@ export default function IdentifySongCommand() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recording, setRecording] = useState(true);
+  const isIdentifying = useRef(false);
 
   useEffect(() => {
+    if (isIdentifying.current) return;
     console.log("[SongSnap] Command initialized, starting identification...");
     identifySong();
   }, []);
 
   async function identifySong(): Promise<void> {
+    if (isIdentifying.current) {
+      console.log("[SongSnap] Identification already in progress, skipping duplicate call");
+      return;
+    }
+
     try {
+      isIdentifying.current = true;
       console.log("[SongSnap] Step 1: Getting preferences...");
       const prefs = getPreferences();
       console.log("[SongSnap] Preferences loaded:", {
@@ -108,7 +116,9 @@ export default function IdentifySongCommand() {
 
       console.log("[SongSnap] Identification complete!");
       setLoading(false);
+      isIdentifying.current = false;
     } catch (err) {
+      isIdentifying.current = false;
       let errorMessage = "Unknown error occurred";
       let errorDetails = "";
       let setupAdvice = "";

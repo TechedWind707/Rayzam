@@ -5,7 +5,7 @@
 
 import React from "react";
 import { List, ActionPanel, Action, Detail, Icon, showToast, Toast, Clipboard } from "@raycast/api";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { HistoryDatabase } from "./storage/database";
 import { HistoryEntry } from "./services/types";
 import { copySongDetails, openInSpotify, openInAppleMusic, openInYouTube } from "./utils/actions";
@@ -16,9 +16,12 @@ export default function SongHistoryCommand() {
   const [selectedSong, setSelectedSong] = useState<HistoryEntry | null>(null);
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(true);
+  const isLoaded = useRef(false);
 
   useEffect(() => {
+    if (isLoaded.current) return;
     loadHistory();
+    isLoaded.current = true;
   }, []);
 
   useEffect(() => {
