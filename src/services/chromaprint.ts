@@ -2,14 +2,15 @@
  * Chromaprint + AcoustID recognition service (free)
  */
 
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
 import path from "path";
 import os from "os";
 import fetch from "node-fetch";
+import fs from "fs";
 import { RecognitionService, SongResult, RecognitionError, RecognitionServiceType } from "./types";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const DEFAULT_ACOUSTID_API_KEY = "6Ch2a1vGSl";
 
 export class ChromaprintService implements RecognitionService {
@@ -21,18 +22,33 @@ export class ChromaprintService implements RecognitionService {
 
   private getBinaryPath(): string {
     const platform = os.platform();
-    const binDir = path.join(__dirname, "../../bin");
+    let binaryName: string;
 
     switch (platform) {
       case "win32":
-        return path.join(binDir, "fpcalc.exe");
+        binaryName = "fpcalc.exe";
+        break;
       case "darwin":
-        return path.join(binDir, "fpcalc-mac");
+        binaryName = "fpcalc-mac";
+        break;
       case "linux":
-        return path.join(binDir, "fpcalc-linux");
+        binaryName = "fpcalc-linux";
+        break;
       default:
         throw new Error(`Unsupported platform: ${platform}`);
     }
+
+    const candidates = [
+      path.resolve(process.cwd(), "bin", binaryName),
+      path.resolve(__dirname, "../../bin", binaryName),
+    ];
+
+    const resolved = candidates.find((candidate) => fs.existsSync(candidate));
+    if (!resolved) {
+      throw new Error(`fpcalc binary not found. Looked in: ${candidates.join(", ")}`);
+    }
+
+    return resolved;
   }
 
   async recognize(audioPath: string): Promise<SongResult> {
@@ -42,7 +58,10 @@ export class ChromaprintService implements RecognitionService {
       const fpcalcPath = this.getBinaryPath();
       console.log("[ChromaprintService] Using binary:", fpcalcPath);
 
-      const { stdout } = await execAsync(`"${fpcalcPath}" -json "${audioPath}"`);
+      const { stdout } = await execFileAsync(fpcalcPath, ["-json", audioPath], {
+        maxBuffer: 10 * 1024 * 1024,
+        windowsHide: true,
+      });
       const fpData = JSON.parse(stdout) as { duration: number; fingerprint: string };
 
       console.log("[ChromaprintService] Fingerprint generated, duration:", fpData.duration);
