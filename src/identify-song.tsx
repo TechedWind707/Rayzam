@@ -25,6 +25,7 @@ export default function IdentifySongCommand() {
   const [song, setSong] = useState<SongResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [noMatch, setNoMatch] = useState(false);
   const [recording, setRecording] = useState(true);
   const isIdentifying = useRef(false);
   const hasShownAcoustIdNudge = useRef(false);
@@ -46,6 +47,10 @@ export default function IdentifySongCommand() {
 
     try {
       isIdentifying.current = true;
+      setLoading(true);
+      setError(null);
+      setNoMatch(false);
+      setSong(null);
       console.log("[SongSnap] Step 1: Getting preferences...");
       const prefs = getPreferences();
       console.log("[SongSnap] Preferences loaded:", {
@@ -141,6 +146,20 @@ export default function IdentifySongCommand() {
         errorDetails = err.stack || "";
       }
 
+      const isNoMatch = errorMessage.toLowerCase().includes("no matches");
+
+      if (isNoMatch) {
+        console.log("[SongSnap] No matches returned by recognition service");
+        setNoMatch(true);
+        setLoading(false);
+        await showToast({
+          style: Toast.Style.Animated,
+          title: "No matches returned",
+          message: "Try another sample",
+        });
+        return;
+      }
+
       console.error("[SongSnap] ERROR during identification:", errorMessage);
       console.error("[SongSnap] Error details:", errorDetails);
       console.error("[SongSnap] Full error object:", err);
@@ -159,6 +178,19 @@ export default function IdentifySongCommand() {
       }
       isIdentifying.current = false;
     }
+  }
+
+  if (noMatch) {
+    return (
+      <Detail
+        markdown={`# No matches returned\n\nWe couldn't find a match for this recording.`}
+        actions={
+          <ActionPanel>
+            <Action title="Try Again" onAction={identifySong} icon={Icon.RotateClockwise} />
+          </ActionPanel>
+        }
+      />
+    );
   }
 
   if (error) {
