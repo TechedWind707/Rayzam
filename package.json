@@ -120,6 +120,6 @@
     "typescript": "^5.3.3"
   },
   "resolutions": {
-  "@types/node": "22.13.10"
-}
+    "@types/node": "22.13.10"
+  }
 }

@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2016",
+    "types": ["node"],
     "module": "commonjs",
     "lib": ["ES2020"],
     "jsx": "react",

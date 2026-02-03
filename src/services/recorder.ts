@@ -36,7 +36,7 @@ export class AudioRecorder {
     console.log("[AudioRecorder] Detecting available audio devices...");
     try {
       const { stdout, stderr } = await execAsync(`ffmpeg -list_devices true -f dshow -i dummy 2>&1`, {
-        shell: true,
+        shell: "cmd.exe",
         maxBuffer: 10 * 1024 * 1024, // 10MB buffer for device list
       });
 
@@ -179,7 +179,7 @@ export class AudioRecorder {
     // This is the most compatible format for music recognition APIs
     const cmd = `ffmpeg -f dshow -i audio="${audioDevice}" -t ${duration} -acodec pcm_s16le -ar 44100 -ac 1 -y "${escapedPath}"`;
     console.log("[AudioRecorder] Executing command:", cmd);
-    await execAsync(cmd, { timeout: (duration + 5) * 1000, shell: true, maxBuffer: 10 * 1024 * 1024 });
+    await execAsync(cmd, { timeout: (duration + 5) * 1000, shell: "cmd.exe", maxBuffer: 10 * 1024 * 1024 });
     console.log("[AudioRecorder] Windows recording successful");
   }
 
