@@ -8,6 +8,7 @@ import { promisify } from "util";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { fileURLToPath } from "url";
 import { AudioRecordingError } from "./types";
 
 const execAsync = promisify(exec);
@@ -95,6 +96,7 @@ export class AudioRecorder {
   async recordAudioToFile(duration: number = 5): Promise<string> {
     const audioFile = path.join(this.tempDir, `songsnap-${Date.now()}.wav`);
     console.log("[AudioRecorder] Starting recording for", duration, "seconds");
+    console.log(process.cwd()); 
     console.log("[AudioRecorder] Platform:", this.platform);
     console.log("[AudioRecorder] Output file:", audioFile);
 
@@ -114,7 +116,9 @@ export class AudioRecorder {
 
       // Save a debug copy for user inspection
       try {
-        const debugDir = path.join(os.homedir(), "songsnap-debug");
+        // const debugDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "songsnap-debug");
+        // const debugDir = path.join(os.homedir(), "SongSnapDebug");
+        const debugDir = "C:\\Coding\\Raycast\\SongSnap\\raycast-songsnap\\songsnap-debug";
         if (!fs.existsSync(debugDir)) {
           fs.mkdirSync(debugDir, { recursive: true });
         }
