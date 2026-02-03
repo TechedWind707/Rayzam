@@ -13,15 +13,20 @@ import { RecognitionService, SongResult, RecognitionError, RecognitionServiceTyp
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_ACOUSTID_API_KEY = "6Ch2a1vGSl";
-const LOG_FILE_PATH = path.join(environment.supportPath, "songsnap.log");
+const LOG_FILE_PATHS = [
+  path.join(environment.supportPath, "songsnap.log"),
+  path.resolve(process.cwd(), "songsnap.log"),
+];
 
 const logToFile = (message: string): void => {
   const timestamp = new Date().toISOString();
-  try {
-    fs.mkdirSync(environment.supportPath, { recursive: true });
-    fs.appendFileSync(LOG_FILE_PATH, `[${timestamp}] ${message}\n`);
-  } catch {
-    // Ignore logging failures
+  for (const logPath of LOG_FILE_PATHS) {
+    try {
+      fs.mkdirSync(path.dirname(logPath), { recursive: true });
+      fs.appendFileSync(logPath, `[${timestamp}] ${message}\n`);
+    } catch {
+      // Ignore logging failures
+    }
   }
 };
 
