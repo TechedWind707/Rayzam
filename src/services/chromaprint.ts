@@ -12,6 +12,19 @@ import { RecognitionService, SongResult, RecognitionError, RecognitionServiceTyp
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_ACOUSTID_API_KEY = "6Ch2a1vGSl";
+const LOG_FILE_CANDIDATES = [path.resolve(process.cwd(), "songsnap.log"), path.resolve(__dirname, "songsnap.log")];
+
+const logToFile = (message: string): void => {
+  const timestamp = new Date().toISOString();
+  for (const logPath of LOG_FILE_CANDIDATES) {
+    try {
+      fs.appendFileSync(logPath, `[${timestamp}] ${message}\n`);
+      return;
+    } catch {
+      // Try next candidate
+    }
+  }
+};
 
 export class ChromaprintService implements RecognitionService {
   private apiKey: string;
@@ -39,12 +52,16 @@ export class ChromaprintService implements RecognitionService {
     }
 
     const candidates = [
+      path.resolve(__dirname, "bin", binaryName),
+      path.resolve(__dirname, "..", "bin", binaryName),
+      path.resolve(__dirname, "..", "..", "bin", binaryName),
+      path.resolve(__dirname, "..", "..", "..", "bin", binaryName),
       path.resolve(process.cwd(), "bin", binaryName),
-      path.resolve(__dirname, "../../bin", binaryName),
     ];
 
     const resolved = candidates.find((candidate) => fs.existsSync(candidate));
     if (!resolved) {
+      logToFile(`[ChromaprintService] fpcalc not found. Candidates: ${candidates.join(", ")}`);
       throw new Error(`fpcalc binary not found. Looked in: ${candidates.join(", ")}`);
     }
 
@@ -53,10 +70,12 @@ export class ChromaprintService implements RecognitionService {
 
   async recognize(audioPath: string): Promise<SongResult> {
     console.log("[ChromaprintService] Starting recognition for:", audioPath);
+    logToFile(`[ChromaprintService] Starting recognition for: ${audioPath}`);
 
     try {
       const fpcalcPath = this.getBinaryPath();
       console.log("[ChromaprintService] Using binary:", fpcalcPath);
+      logToFile(`[ChromaprintService] Using binary: ${fpcalcPath}`);
 
       const { stdout } = await execFileAsync(fpcalcPath, ["-json", audioPath], {
         maxBuffer: 10 * 1024 * 1024,
@@ -65,6 +84,7 @@ export class ChromaprintService implements RecognitionService {
       const fpData = JSON.parse(stdout) as { duration: number; fingerprint: string };
 
       console.log("[ChromaprintService] Fingerprint generated, duration:", fpData.duration);
+      logToFile(`[ChromaprintService] Fingerprint generated, duration: ${fpData.duration}`);
 
       const params = new URLSearchParams({
         client: this.apiKey,
@@ -87,6 +107,7 @@ export class ChromaprintService implements RecognitionService {
       };
 
       console.log("[ChromaprintService] API response:", JSON.stringify(data, null, 2));
+      logToFile("[ChromaprintService] API response received.");
 
       if (!data.results || data.results.length === 0) {
         throw new Error("No matches found");
@@ -104,6 +125,7 @@ export class ChromaprintService implements RecognitionService {
       const year = recording.releasegroups?.[0]?.date?.split("-")[0] || null;
 
       console.log("[ChromaprintService] Match found:", recording.title, "by", artist);
+      logToFile(`[ChromaprintService] Match found: ${recording.title} by ${artist}`);
 
       return {
         title: recording.title,
@@ -119,6 +141,9 @@ export class ChromaprintService implements RecognitionService {
       };
     } catch (error) {
       console.error("[ChromaprintService] Recognition failed:", error);
+      logToFile(
+        `[ChromaprintService] Recognition failed: ${error instanceof Error ? error.message : String(error)}`
+      );
       throw new RecognitionError(
         `Chromaprint recognition failed: ${error instanceof Error ? error.message : String(error)}`,
         RecognitionServiceType.CHROMAPRINT,
