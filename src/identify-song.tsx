@@ -4,11 +4,11 @@
  */
 
 import React from "react";
-import { Detail, ActionPanel, Action, Icon, Toast, showToast, showHUD } from "@raycast/api";
+import { Detail, ActionPanel, Action, Icon, Toast, showToast, open } from "@raycast/api";
 import { useState, useEffect, useRef } from "react";
 import { AudioRecorder } from "./services/recorder";
-import { ServiceFactory } from "./services";
-import { SongResult, RecognitionError, RecognitionService } from "./services/types";
+import { createRecognitionService } from "./services";
+import { SongResult, RecognitionError, RecognitionServiceType } from "./services/types";
 import { getPreferences, validatePreferences } from "./utils/preferences";
 import { HistoryDatabase } from "./storage/database";
 import {
@@ -19,12 +19,15 @@ import {
   openInYouTube,
 } from "./utils/actions";
 
+const ACOUSTID_API_URL = "https://acoustid.org/new-application";
+
 export default function IdentifySongCommand() {
   const [song, setSong] = useState<SongResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recording, setRecording] = useState(true);
   const isIdentifying = useRef(false);
+  const hasShownAcoustIdNudge = useRef(false);
 
   useEffect(() => {
     if (isIdentifying.current) return;
@@ -38,12 +41,15 @@ export default function IdentifySongCommand() {
       return;
     }
 
+    let recorder: AudioRecorder | null = null;
+    let audioFilePath: string | null = null;
+
     try {
       isIdentifying.current = true;
       console.log("[SongSnap] Step 1: Getting preferences...");
       const prefs = getPreferences();
       console.log("[SongSnap] Preferences loaded:", {
-        service: prefs.recognitionService,
+        service: prefs.service,
         duration: prefs.recordingDuration,
       });
 
@@ -54,6 +60,19 @@ export default function IdentifySongCommand() {
         throw new Error(validationError);
       }
 
+      if (prefs.service === RecognitionServiceType.CHROMAPRINT && !prefs.acoustIdApiKey && !hasShownAcoustIdNudge.current) {
+        const toast = await showToast({
+          style: Toast.Style.Animated,
+          title: "Using shared AcoustID key",
+          message: "Get your own at acoustid.org/new-application",
+        });
+        toast.primaryAction = {
+          title: "Get API Key",
+          onAction: () => open(ACOUSTID_API_URL),
+        };
+        hasShownAcoustIdNudge.current = true;
+      }
+
       console.log("[SongSnap] Step 2: Starting audio recording...");
       setRecording(true);
       await showToast({
@@ -62,13 +81,13 @@ export default function IdentifySongCommand() {
         message: `${prefs.recordingDuration} seconds`,
       });
 
-      const recorder = new AudioRecorder();
+      recorder = new AudioRecorder();
       console.log("[SongSnap] AudioRecorder created, recording for", prefs.recordingDuration, "seconds");
-      const audioBuffer = await recorder.recordAudio(prefs.recordingDuration);
+      audioFilePath = await recorder.recordAudioToFile(prefs.recordingDuration);
 
-      console.log("[SongSnap] Audio recorded successfully, buffer size:", audioBuffer.length, "bytes");
+      console.log("[SongSnap] Audio recorded successfully, file:", audioFilePath);
       setRecording(false);
-      
+
       await showToast({
         style: Toast.Style.Animated,
         title: "🔍 Identifying...",
@@ -76,16 +95,10 @@ export default function IdentifySongCommand() {
       });
 
       console.log("[SongSnap] Step 3: Creating recognition service...");
-      const service = ServiceFactory.createService({
-        service: prefs.recognitionService,
-        acrcloudAccessKey: prefs.acrcloudAccessKey,
-        acrcloudAccessSecret: prefs.acrcloudAccessSecret,
-        auddApiToken: prefs.auddApiToken,
-      });
+      const service = createRecognitionService();
 
-      console.log("[SongSnap] Service created:", prefs.recognitionService);
       console.log("[SongSnap] Step 4: Sending audio to recognition service...");
-      const result = await service.recognize(audioBuffer);
+      const result = await service.recognize(audioFilePath);
 
       console.log("[SongSnap] Song recognized:", {
         title: result.title,
@@ -98,9 +111,9 @@ export default function IdentifySongCommand() {
       console.log("[SongSnap] Step 5: Saving to history database...");
       const db = new HistoryDatabase();
       const historyEntry = await db.addSong(result.title, result.artist, {
-        album: result.album,
+        album: result.album ?? undefined,
         releaseYear: result.releaseYear,
-        service: prefs.recognitionService,
+        service: prefs.service,
         timestamp: Date.now(),
         confidence: result.confidence,
       });
@@ -116,21 +129,13 @@ export default function IdentifySongCommand() {
 
       console.log("[SongSnap] Identification complete!");
       setLoading(false);
-      isIdentifying.current = false;
     } catch (err) {
-      isIdentifying.current = false;
       let errorMessage = "Unknown error occurred";
       let errorDetails = "";
-      let setupAdvice = "";
 
       if (err instanceof RecognitionError) {
         errorMessage = `${err.service}: ${err.message}`;
         errorDetails = err.originalError?.message || "";
-        
-        // Provide setup advice for Shazamio errors
-        if (err.service === RecognitionService.SHAZAMIO) {
-          setupAdvice = "\n\n**Recommendation:** Try AudD service instead (easier setup) or ACRCloud for professional use.";
-        }
       } else if (err instanceof Error) {
         errorMessage = err.message;
         errorDetails = err.stack || "";
@@ -140,7 +145,7 @@ export default function IdentifySongCommand() {
       console.error("[SongSnap] Error details:", errorDetails);
       console.error("[SongSnap] Full error object:", err);
 
-      setError(errorMessage + setupAdvice);
+      setError(errorMessage);
       setLoading(false);
 
       await showToast({
@@ -148,6 +153,11 @@ export default function IdentifySongCommand() {
         title: "✗ Failed to identify song",
         message: errorMessage,
       });
+    } finally {
+      if (recorder && audioFilePath) {
+        await recorder.cleanupAudioFile(audioFilePath);
+      }
+      isIdentifying.current = false;
     }
   }
 
@@ -166,9 +176,7 @@ export default function IdentifySongCommand() {
 
   if (!song) {
     return (
-      <Detail
-        markdown={`# ${recording ? "🎤 Recording" : "🔍 Identifying..."}\n\nPlease wait...`}
-      />
+      <Detail markdown={`# ${recording ? "🎤 Recording" : "🔍 Identifying..."}\n\nPlease wait...`} />
     );
   }
 
@@ -213,11 +221,7 @@ export default function IdentifySongCommand() {
             icon={{ source: "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/youtube.svg" }}
             onAction={() => openInYouTube(undefined, song.artist, song.title)}
           />
-          <Action
-            title="Copy Song Details"
-            icon={Icon.Clipboard}
-            onAction={() => copySongDetails(song)}
-          />
+          <Action title="Copy Song Details" icon={Icon.Clipboard} onAction={() => copySongDetails(song)} />
           <Action title="Identify Another Song" icon={Icon.RotateClockwise} onAction={identifySong} />
         </ActionPanel>
       }

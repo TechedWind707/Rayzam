@@ -2,7 +2,7 @@
   "name": "raycast-songsnap",
   "title": "SongSnap - Shazam for Raycast",
   "description": "Music recognition extension for Raycast. Identify songs instantly without leaving your workflow.",
-  "icon": "assets/icon.png",
+  "icon": "icon.png",
   "author": "SongSnap Team",
   "license": "MIT",
   "commands": [
@@ -23,73 +23,70 @@
   ],
   "preferences": [
     {
-      "name": "recognitionService",
-      "title": "Recognition Service",
-      "description": "Choose which service to use for music recognition",
+      "name": "service",
       "type": "dropdown",
-      "default": "shazamio",
+      "required": false,
+      "title": "Recognition Service",
+      "description": "Which service to use for song recognition",
+      "default": "chromaprint",
       "data": [
         {
-          "value": "shazamio",
-          "title": "Shazamio (Free, no API key needed)"
+          "title": "Chromaprint (FREE, unlimited, 80-85% accuracy)",
+          "value": "chromaprint"
         },
         {
-          "value": "acrcloud",
-          "title": "ACRCloud (Official, requires API key)"
+          "title": "AudD (Requires API key, 600/day free, 90-95% accuracy)",
+          "value": "audd"
         },
         {
-          "value": "audd",
-          "title": "AudD (Official, requires API key)"
+          "title": "ACRCloud (Requires API key, paid, 95%+ accuracy)",
+          "value": "acrcloud"
         }
-      ],
-      "required": true
-    },
-    {
-      "name": "acrcloudAccessKey",
-      "title": "ACRCloud Access Key",
-      "description": "Your ACRCloud Access Key (only needed if using ACRCloud)",
-      "type": "password",
-      "required": false
-    },
-    {
-      "name": "acrcloudAccessSecret",
-      "title": "ACRCloud Access Secret",
-      "description": "Your ACRCloud Access Secret (only needed if using ACRCloud)",
-      "type": "password",
-      "required": false
-    },
-    {
-      "name": "auddApiToken",
-      "title": "AudD API Token",
-      "description": "Your AudD API Token (only needed if using AudD)",
-      "type": "password",
-      "required": false
+      ]
     },
     {
       "name": "recordingDuration",
-      "title": "Recording Duration (seconds)",
-      "description": "How long to record audio for recognition (3-15 seconds)",
-      "type": "dropdown",
-      "default": "5",
-      "data": [
-        {
-          "value": "3",
-          "title": "3 seconds"
-        },
-        {
-          "value": "5",
-          "title": "5 seconds"
-        },
-        {
-          "value": "10",
-          "title": "10 seconds"
-        },
-        {
-          "value": "15",
-          "title": "15 seconds"
-        }
-      ],
-      "required": true
+      "type": "textfield",
+      "required": false,
+      "title": "Recording Duration",
+      "description": "How many seconds to record audio",
+      "default": "15"
+    },
+    {
+      "name": "acoustIdApiKey",
+      "type": "password",
+      "required": false,
+      "title": "AcoustID API Key",
+      "description": "Optional: Use your own key from acoustid.org/new-application"
+    },
+    {
+      "name": "auddApiKey",
+      "type": "password",
+      "required": false,
+      "title": "AudD API Key",
+      "description": "API key from audd.io (only needed if using AudD service)"
+    },
+    {
+      "name": "acrcloudAccessKey",
+      "type": "password",
+      "required": false,
+      "title": "ACRCloud Access Key",
+      "description": "Access key from acrcloud.com (only needed if using ACRCloud)"
+    },
+    {
+      "name": "acrcloudAccessSecret",
+      "type": "password",
+      "required": false,
+      "title": "ACRCloud Access Secret",
+      "description": "Access secret from acrcloud.com (only needed if using ACRCloud)"
+    },
+    {
+      "name": "acrcloudHost",
+      "type": "textfield",
+      "required": false,
+      "title": "ACRCloud Host",
+      "description": "ACRCloud host endpoint (only needed if using ACRCloud)",
+      "default": "identify-eu-west-1.acrcloud.com"
     }
   ],
   "version": "1.0.0",
@@ -106,6 +103,7 @@
     "@raycast/utils": "^1.13.0",
     "axios": "^1.6.8",
     "crypto-js": "^4.2.0",
+    "node-fetch": "3.3.2",
     "uuid": "^9.0.1"
   },
   "devDependencies": {

@@ -2,48 +2,47 @@
  * Service factory - creates the appropriate recognition service based on user preferences
  */
 
-import { MusicRecognitionService, RecognitionService } from "./types";
-import { ShazamioService } from "./shazamio";
-import { ACRCloudService } from "./acrcloud";
+import { RecognitionService, RecognitionServiceType } from "./types";
+import { ChromaprintService } from "./chromaprint";
 import { AudDService } from "./audd";
+import { ACRCloudService } from "./acrcloud";
+import { getPreferences } from "../utils/preferences";
 
-export interface ServiceConfig {
-  service: RecognitionService;
-  acrcloudAccessKey?: string;
-  acrcloudAccessSecret?: string;
-  auddApiToken?: string;
-}
+export function createRecognitionService(): RecognitionService {
+  const preferences = getPreferences();
+  const service = preferences.service || RecognitionServiceType.CHROMAPRINT;
 
-export class ServiceFactory {
-  static createService(config: ServiceConfig): MusicRecognitionService {
-    console.log("[ServiceFactory] Creating service for:", config.service);
+  console.log("[ServiceFactory] Creating service:", service);
 
-    switch (config.service) {
-      case RecognitionService.ACRCLOUD:
-        console.log("[ServiceFactory] Validating ACRCloud credentials...");
-        if (!config.acrcloudAccessKey || !config.acrcloudAccessSecret) {
-          console.error("[ServiceFactory] Missing ACRCloud credentials");
-          throw new Error("ACRCloud credentials are required");
-        }
-        console.log("[ServiceFactory] ACRCloud service created");
-        return new ACRCloudService(
-          config.acrcloudAccessKey,
-          config.acrcloudAccessSecret
-        );
+  switch (service) {
+    case RecognitionServiceType.CHROMAPRINT:
+      console.log("[ServiceFactory] Using FREE Chromaprint + AcoustID");
+      return new ChromaprintService(preferences.acoustIdApiKey);
 
-      case RecognitionService.AUDD:
-        console.log("[ServiceFactory] Validating AudD credentials...");
-        if (!config.auddApiToken) {
-          console.error("[ServiceFactory] Missing AudD API token");
-          throw new Error("AudD API token is required");
-        }
-        console.log("[ServiceFactory] AudD service created");
-        return new AudDService(config.auddApiToken);
+    case RecognitionServiceType.AUDD:
+      if (!preferences.auddApiKey) {
+        console.warn("[ServiceFactory] AudD selected but no API key, falling back to Chromaprint");
+        return new ChromaprintService(preferences.acoustIdApiKey);
+      }
+      console.log("[ServiceFactory] Using AudD with API key");
+      return new AudDService(preferences.auddApiKey);
 
-      case RecognitionService.SHAZAMIO:
-      default:
-        console.log("[ServiceFactory] Shazamio service created (default)");
-        return new ShazamioService();
-    }
+    case RecognitionServiceType.ACRCLOUD:
+      if (!preferences.acrcloudAccessKey || !preferences.acrcloudAccessSecret) {
+        console.warn("[ServiceFactory] ACRCloud selected but credentials missing, falling back to Chromaprint");
+        return new ChromaprintService(preferences.acoustIdApiKey);
+      }
+      console.log("[ServiceFactory] Using ACRCloud");
+      return new ACRCloudService(
+        preferences.acrcloudAccessKey,
+        preferences.acrcloudAccessSecret,
+        preferences.acrcloudHost || "identify-eu-west-1.acrcloud.com"
+      );
+
+    default:
+      console.log("[ServiceFactory] Unknown service, defaulting to Chromaprint");
+      return new ChromaprintService(preferences.acoustIdApiKey);
   }
 }
+
+export * from "./types";

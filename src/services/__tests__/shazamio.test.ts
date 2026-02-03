@@ -3,9 +3,12 @@
  */
 
 import { ShazamioService } from "../shazamio";
-import { RecognitionError, RecognitionService } from "../types";
 
-jest.mock("axios");
+jest.mock("../chromaprint", () => ({
+  ChromaprintService: jest.fn().mockImplementation(() => ({
+    recognize: jest.fn().mockResolvedValue({ title: "Test Song", artist: "Test Artist" }),
+  })),
+}));
 
 describe("ShazamioService", () => {
   let service: ShazamioService;
@@ -19,15 +22,9 @@ describe("ShazamioService", () => {
     expect(service).toBeDefined();
   });
 
-  it("should throw RecognitionError on API failure", async () => {
-    const audioBuffer = Buffer.from("test audio data");
-
-    try {
-      await service.recognize(audioBuffer);
-    } catch (err) {
-      if (err instanceof RecognitionError) {
-        expect(err.service).toBe(RecognitionService.SHAZAMIO);
-      }
-    }
+  it("should delegate recognition to Chromaprint", async () => {
+    const result = await service.recognize("/tmp/test.wav");
+    expect(result.title).toBe("Test Song");
+    expect(result.artist).toBe("Test Artist");
   });
 });

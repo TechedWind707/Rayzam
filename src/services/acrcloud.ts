@@ -5,18 +5,20 @@
 
 import axios, { AxiosInstance } from "axios";
 import crypto from "crypto-js";
-import { MusicRecognitionService, SongResult, RecognitionError, RecognitionService } from "./types";
+import * as fs from "fs";
+import { RecognitionService, SongResult, RecognitionError, RecognitionServiceType } from "./types";
 
-export class ACRCloudService implements MusicRecognitionService {
+export class ACRCloudService implements RecognitionService {
   private api: AxiosInstance;
   private accessKey: string;
   private accessSecret: string;
-  private readonly baseUrl = "https://identify-us.acrcloud.com";
+  private baseUrl: string;
   private readonly timeout = 30000;
 
-  constructor(accessKey: string, accessSecret: string) {
+  constructor(accessKey: string, accessSecret: string, host: string = "identify-us.acrcloud.com") {
     this.accessKey = accessKey;
     this.accessSecret = accessSecret;
+    this.baseUrl = host.startsWith("http") ? host : `https://${host}`;
 
     this.api = axios.create({
       baseURL: this.baseUrl,
@@ -27,8 +29,9 @@ export class ACRCloudService implements MusicRecognitionService {
     });
   }
 
-  async recognize(audioBuffer: Buffer): Promise<SongResult> {
+  async recognize(audioPath: string): Promise<SongResult> {
     try {
+      const audioBuffer = await fs.promises.readFile(audioPath);
       const timestamp = Math.floor(Date.now() / 1000).toString();
       const signature = this.generateSignature(audioBuffer, timestamp);
 
@@ -40,10 +43,7 @@ export class ACRCloudService implements MusicRecognitionService {
       formData.append("data_type", "audio");
       formData.append("audio_format", "wav");
       formData.append("file_fields", "title,artists,album,genres,duration");
-      formData.append(
-        "access_key",
-        this.accessKey
-      );
+      formData.append("access_key", this.accessKey);
 
       const response = await this.api.post("/v1/identify", formData);
 
@@ -51,17 +51,14 @@ export class ACRCloudService implements MusicRecognitionService {
         return this.parseACRCloudResponse(response.data.metadata.music[0]);
       }
 
-      throw new RecognitionError(
-        "No matches found",
-        RecognitionService.ACRCLOUD
-      );
+      throw new RecognitionError("No matches found", RecognitionServiceType.ACRCLOUD);
     } catch (error) {
       if (error instanceof RecognitionError) {
         throw error;
       }
       throw new RecognitionError(
         `Recognition failed: ${error instanceof Error ? error.message : String(error)}`,
-        RecognitionService.ACRCLOUD,
+        RecognitionServiceType.ACRCLOUD,
         error instanceof Error ? error : undefined
       );
     }
@@ -75,14 +72,14 @@ export class ACRCloudService implements MusicRecognitionService {
   private parseACRCloudResponse(music: Record<string, unknown>): SongResult {
     const artists = music.artists as Record<string, unknown>[] | undefined;
     const album = music.album as Record<string, unknown> | undefined;
+    const releaseYear = album?.release_date ? new Date(album.release_date as string).getFullYear() : undefined;
 
     return {
       title: (music.title as string) || "Unknown",
-      artist: artists?.[0]?.name as string || "Unknown Artist",
+      artist: (artists?.[0]?.name as string) || "Unknown Artist",
       album: (album?.name as string) || undefined,
-      releaseYear: album?.release_date
-        ? new Date(album.release_date as string).getFullYear()
-        : undefined,
+      year: releaseYear ? releaseYear.toString() : undefined,
+      releaseYear,
       duration: (music.duration as number) || undefined,
       isrc: (music.isrc as string) || undefined,
       confidence: (music.score as number) / 100,

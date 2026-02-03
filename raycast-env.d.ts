@@ -8,16 +8,20 @@
 /* eslint-disable @typescript-eslint/ban-types */
 
 type ExtensionPreferences = {
-  /** Recognition Service - Choose which service to use for music recognition */
-  "recognitionService": "shazamio" | "acrcloud" | "audd",
-  /** ACRCloud Access Key - Your ACRCloud Access Key (only needed if using ACRCloud) */
+  /** Recognition Service - Which service to use for song recognition */
+  "service": "chromaprint" | "audd" | "acrcloud",
+  /** Recording Duration - How many seconds to record audio */
+  "recordingDuration": string,
+  /** AcoustID API Key - Optional: Use your own key from acoustid.org/new-application */
+  "acoustIdApiKey"?: string,
+  /** AudD API Key - API key from audd.io (only needed if using AudD service) */
+  "auddApiKey"?: string,
+  /** ACRCloud Access Key - Access key from acrcloud.com (only needed if using ACRCloud) */
   "acrcloudAccessKey"?: string,
-  /** ACRCloud Access Secret - Your ACRCloud Access Secret (only needed if using ACRCloud) */
+  /** ACRCloud Access Secret - Access secret from acrcloud.com (only needed if using ACRCloud) */
   "acrcloudAccessSecret"?: string,
-  /** AudD API Token - Your AudD API Token (only needed if using AudD) */
-  "auddApiToken"?: string,
-  /** Recording Duration (seconds) - How long to record audio for recognition (3-15 seconds) */
-  "recordingDuration": "3" | "5" | "10" | "15"
+  /** ACRCloud Host - ACRCloud host endpoint (only needed if using ACRCloud) */
+  "acrcloudHost": string
 }
 
 /** Preferences accessible in all the extension's commands */

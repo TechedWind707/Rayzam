@@ -38,14 +38,14 @@ export class AudioRecorder {
         shell: true,
         maxBuffer: 10 * 1024 * 1024, // 10MB buffer for device list
       });
-      
+
       const output = stdout + stderr;
       const audioDevices: string[] = [];
-      
+
       // Parse ffmpeg output to find audio devices
       // Format: [dshow @ ...] "Device Name" (audio)
       const matches = output.match(/"([^"]+)"\s*\(audio\)/g);
-      
+
       if (matches) {
         for (const match of matches) {
           // Extract device name from "Device Name" (audio)
@@ -56,11 +56,11 @@ export class AudioRecorder {
           }
         }
       }
-      
+
       if (audioDevices.length === 0) {
         throw new Error("No audio input devices found. Please check your audio settings.");
       }
-      
+
       // Use the first available device
       this.cachedAudioDevice = audioDevices[0];
       console.log("[AudioRecorder] Selected audio device:", this.cachedAudioDevice);
@@ -77,6 +77,22 @@ export class AudioRecorder {
    * Record audio from the default microphone
    */
   async recordAudio(duration: number = 5): Promise<Buffer> {
+    const audioFile = await this.recordAudioToFile(duration);
+
+    try {
+      console.log("[AudioRecorder] Recording completed, reading file...");
+      const audioBuffer = await fs.promises.readFile(audioFile);
+      console.log("[AudioRecorder] Audio file read successfully, size:", audioBuffer.length, "bytes");
+      return audioBuffer;
+    } finally {
+      await this.cleanupAudioFile(audioFile);
+    }
+  }
+
+  /**
+   * Record audio and return the path to the temp file
+   */
+  async recordAudioToFile(duration: number = 5): Promise<string> {
     const audioFile = path.join(this.tempDir, `songsnap-${Date.now()}.wav`);
     console.log("[AudioRecorder] Starting recording for", duration, "seconds");
     console.log("[AudioRecorder] Platform:", this.platform);
@@ -96,11 +112,6 @@ export class AudioRecorder {
         throw new AudioRecordingError(`Unsupported platform: ${this.platform}`);
       }
 
-      console.log("[AudioRecorder] Recording completed, reading file...");
-      // Read the audio file
-      const audioBuffer = await fs.promises.readFile(audioFile);
-      console.log("[AudioRecorder] Audio file read successfully, size:", audioBuffer.length, "bytes");
-      
       // Save a debug copy for user inspection
       try {
         const debugDir = path.join(os.homedir(), "songsnap-debug");
@@ -114,22 +125,22 @@ export class AudioRecorder {
       } catch (debugErr) {
         console.warn("[AudioRecorder] Failed to save debug copy:", debugErr);
       }
-      
-      // Clean up temp file
-      await fs.promises.unlink(audioFile).catch((err) => {
-        console.warn("[AudioRecorder] Failed to clean up temp file:", err);
-      });
-      
-      return audioBuffer;
+
+      return audioFile;
     } catch (error) {
       console.error("[AudioRecorder] Recording error:", error);
-      // Clean up on error
-      await fs.promises.unlink(audioFile).catch(() => {});
+      await this.cleanupAudioFile(audioFile);
       throw new AudioRecordingError(
         `Failed to record audio: ${error instanceof Error ? error.message : String(error)}`,
         error instanceof Error ? error : undefined
       );
     }
+  }
+
+  async cleanupAudioFile(audioFile: string): Promise<void> {
+    await fs.promises.unlink(audioFile).catch((err) => {
+      console.warn("[AudioRecorder] Failed to clean up temp file:", err);
+    });
   }
 
   private async recordMacOS(outputFile: string, duration: number): Promise<void> {
@@ -155,11 +166,11 @@ export class AudioRecorder {
     console.log("[AudioRecorder] Recording on Windows with ffmpeg...");
     // Escape backslashes in path for Windows
     const escapedPath = outputFile.replace(/\\/g, "\\\\");
-    
+
     // Auto-detect the audio device
     const audioDevice = await this.detectWindowsAudioDevice();
     console.log("[AudioRecorder] Using audio device:", audioDevice);
-    
+
     // Use better audio codec for recognition: PCM 16-bit 44.1kHz mono
     // This is the most compatible format for music recognition APIs
     const cmd = `ffmpeg -f dshow -i audio="${audioDevice}" -t ${duration} -acodec pcm_s16le -ar 44100 -ac 1 -y "${escapedPath}"`;

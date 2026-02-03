@@ -4,9 +4,10 @@
  */
 
 import axios, { AxiosInstance } from "axios";
-import { MusicRecognitionService, SongResult, RecognitionError, RecognitionService } from "./types";
+import * as fs from "fs";
+import { RecognitionService, SongResult, RecognitionError, RecognitionServiceType } from "./types";
 
-export class AudDService implements MusicRecognitionService {
+export class AudDService implements RecognitionService {
   private api: AxiosInstance;
   private apiToken: string;
   private readonly baseUrl = "https://api.audd.io";
@@ -21,9 +22,11 @@ export class AudDService implements MusicRecognitionService {
     });
   }
 
-  async recognize(audioBuffer: Buffer): Promise<SongResult> {
-    console.log("[AudDService] Starting recognition, audio buffer size:", audioBuffer.length, "bytes");
+  async recognize(audioPath: string): Promise<SongResult> {
     try {
+      const audioBuffer = await fs.promises.readFile(audioPath);
+      console.log("[AudDService] Starting recognition, audio buffer size:", audioBuffer.length, "bytes");
+
       const formData = new FormData();
       const blob = new Blob([audioBuffer], { type: "audio/wav" });
       formData.append("file", blob);
@@ -32,7 +35,7 @@ export class AudDService implements MusicRecognitionService {
 
       console.log("[AudDService] Sending audio to AudD API...");
       console.log("[AudDService] Blob size:", blob.size, "bytes");
-      
+
       const response = await this.api.post("/recognize", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
@@ -48,10 +51,7 @@ export class AudDService implements MusicRecognitionService {
 
       const errorMsg = response.data?.error || "No matches found";
       console.error("[AudDService] No match:", errorMsg);
-      throw new RecognitionError(
-        errorMsg,
-        RecognitionService.AUDD
-      );
+      throw new RecognitionError(errorMsg, RecognitionServiceType.AUDD);
     } catch (error) {
       console.error("[AudDService] Recognition error:", error);
       if (error instanceof RecognitionError) {
@@ -59,7 +59,7 @@ export class AudDService implements MusicRecognitionService {
       }
       throw new RecognitionError(
         `Recognition failed: ${error instanceof Error ? error.message : String(error)}`,
-        RecognitionService.AUDD,
+        RecognitionServiceType.AUDD,
         error instanceof Error ? error : undefined
       );
     }
@@ -68,14 +68,14 @@ export class AudDService implements MusicRecognitionService {
   private parseAudDResponse(result: Record<string, unknown>): SongResult {
     const spotifyData = result.spotify as Record<string, unknown> | undefined;
     const itunesData = result.itunes as Record<string, unknown> | undefined;
+    const releaseYear = result.release_date ? new Date(result.release_date as string).getFullYear() : undefined;
 
     return {
       title: (result.title as string) || "Unknown",
       artist: (result.artist as string) || "Unknown Artist",
       album: (result.album as string) || undefined,
-      releaseYear: result.release_date
-        ? new Date(result.release_date as string).getFullYear()
-        : undefined,
+      year: releaseYear ? releaseYear.toString() : undefined,
+      releaseYear,
       duration: (result.duration as number) || undefined,
       isrc: (result.isrc as string) || undefined,
       spotifyId: (spotifyData?.id as string) || undefined,

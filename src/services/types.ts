@@ -2,24 +2,30 @@
  * Core types and interfaces for the SongSnap extension
  */
 
-export interface SongResult {
+export interface RecognitionResult {
   title: string;
   artist: string;
-  album?: string;
+  album?: string | null;
+  year?: string | null;
+  genre?: string | null;
+  albumArt?: string;
+  confidence?: number;
+  isrc?: string | null;
+  duration?: number;
+}
+
+export interface RecognitionService {
+  recognize(audioPath: string): Promise<RecognitionResult>;
+}
+
+export type SongResult = RecognitionResult & {
   releaseYear?: number;
   albumArtUrl?: string;
-  isrc?: string;
   spotifyId?: string;
   youtubeUrl?: string;
   appleMusicUrl?: string;
-  duration?: number;
-  confidence?: number;
   rawData?: Record<string, unknown>;
-}
-
-export interface MusicRecognitionService {
-  recognize(audioBuffer: Buffer): Promise<SongResult>;
-}
+};
 
 export interface RecognitionOptions {
   duration: number;
@@ -37,8 +43,8 @@ export interface HistoryEntry {
   confidence?: number;
 }
 
-export enum RecognitionService {
-  SHAZAMIO = "shazamio",
+export enum RecognitionServiceType {
+  CHROMAPRINT = "chromaprint",
   ACRCLOUD = "acrcloud",
   AUDD = "audd",
 }
@@ -46,7 +52,7 @@ export enum RecognitionService {
 export class RecognitionError extends Error {
   constructor(
     message: string,
-    public service: RecognitionService,
+    public service: RecognitionServiceType,
     public originalError?: Error
   ) {
     super(`[${service}] ${message}`);

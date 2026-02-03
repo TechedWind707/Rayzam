@@ -3,37 +3,43 @@
  */
 
 import { getPreferenceValues } from "@raycast/api";
-import { RecognitionService } from "../services/types";
+import { RecognitionServiceType } from "../services/types";
 
 export interface Preferences {
-  recognitionService: RecognitionService;
+  service: RecognitionServiceType;
+  recordingDuration: number;
+  auddApiKey?: string;
   acrcloudAccessKey?: string;
   acrcloudAccessSecret?: string;
-  auddApiToken?: string;
-  recordingDuration: number;
+  acrcloudHost?: string;
+  acoustIdApiKey?: string;
 }
 
 export function getPreferences(): Preferences {
   console.log("[Preferences] Loading preferences...");
-  const prefs = getPreferenceValues<Record<string, unknown>>();
 
-  const result: Preferences = {
-    recognitionService: (prefs.recognitionService as RecognitionService) || RecognitionService.SHAZAMIO,
-    acrcloudAccessKey: (prefs.acrcloudAccessKey as string) || undefined,
-    acrcloudAccessSecret: (prefs.acrcloudAccessSecret as string) || undefined,
-    auddApiToken: (prefs.auddApiToken as string) || undefined,
-    recordingDuration: parseInt(prefs.recordingDuration as string) || 5,
+  const prefs = getPreferenceValues<Preferences>();
+
+  const preferences: Preferences = {
+    service: prefs.service || RecognitionServiceType.CHROMAPRINT,
+    recordingDuration: Number(prefs.recordingDuration) || 15,
+    auddApiKey: prefs.auddApiKey,
+    acrcloudAccessKey: prefs.acrcloudAccessKey,
+    acrcloudAccessSecret: prefs.acrcloudAccessSecret,
+    acrcloudHost: prefs.acrcloudHost,
+    acoustIdApiKey: prefs.acoustIdApiKey,
   };
 
-  console.log("[Preferences] Loaded preferences:", {
-    recognitionService: result.recognitionService,
-    recordingDuration: result.recordingDuration,
-    hasAcrCloudKey: !!result.acrcloudAccessKey,
-    hasAcrCloudSecret: !!result.acrcloudAccessSecret,
-    hasAudDToken: !!result.auddApiToken,
+  console.log("[Preferences] Loaded:", {
+    service: preferences.service,
+    duration: preferences.recordingDuration,
+    hasAuddKey: !!preferences.auddApiKey,
+    hasACRCloudKey: !!preferences.acrcloudAccessKey,
+    hasACRCloudSecret: !!preferences.acrcloudAccessSecret,
+    hasAcoustIdKey: !!preferences.acoustIdApiKey,
   });
 
-  return result;
+  return preferences;
 }
 
 export function validatePreferences(prefs: Preferences): string | null {
@@ -42,22 +48,6 @@ export function validatePreferences(prefs: Preferences): string | null {
   if (prefs.recordingDuration < 3 || prefs.recordingDuration > 15) {
     console.error("[Preferences] Invalid recording duration:", prefs.recordingDuration);
     return "Recording duration must be between 3 and 15 seconds";
-  }
-
-  if (prefs.recognitionService === RecognitionService.ACRCLOUD) {
-    if (!prefs.acrcloudAccessKey || !prefs.acrcloudAccessSecret) {
-      console.error("[Preferences] ACRCloud selected but credentials missing");
-      return "ACRCloud Access Key and Secret are required when using ACRCloud service";
-    }
-    console.log("[Preferences] ACRCloud credentials present");
-  }
-
-  if (prefs.recognitionService === RecognitionService.AUDD) {
-    if (!prefs.auddApiToken) {
-      console.error("[Preferences] AudD selected but token missing");
-      return "AudD API Token is required when using AudD service";
-    }
-    console.log("[Preferences] AudD token present");
   }
 
   console.log("[Preferences] Validation passed");
