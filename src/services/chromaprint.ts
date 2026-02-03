@@ -8,21 +8,20 @@ import path from "path";
 import os from "os";
 import fetch from "node-fetch";
 import fs from "fs";
+import { environment } from "@raycast/api";
 import { RecognitionService, SongResult, RecognitionError, RecognitionServiceType } from "./types";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_ACOUSTID_API_KEY = "6Ch2a1vGSl";
-const LOG_FILE_CANDIDATES = [path.resolve(process.cwd(), "songsnap.log"), path.resolve(__dirname, "songsnap.log")];
+const LOG_FILE_PATH = path.join(environment.supportPath, "songsnap.log");
 
 const logToFile = (message: string): void => {
   const timestamp = new Date().toISOString();
-  for (const logPath of LOG_FILE_CANDIDATES) {
-    try {
-      fs.appendFileSync(logPath, `[${timestamp}] ${message}\n`);
-      return;
-    } catch {
-      // Try next candidate
-    }
+  try {
+    fs.mkdirSync(environment.supportPath, { recursive: true });
+    fs.appendFileSync(LOG_FILE_PATH, `[${timestamp}] ${message}\n`);
+  } catch {
+    // Ignore logging failures
   }
 };
 
@@ -52,11 +51,12 @@ export class ChromaprintService implements RecognitionService {
     }
 
     const candidates = [
-      path.resolve(__dirname, "bin", binaryName),
-      path.resolve(__dirname, "..", "bin", binaryName),
-      path.resolve(__dirname, "..", "..", "bin", binaryName),
-      path.resolve(__dirname, "..", "..", "..", "bin", binaryName),
+      path.join(environment.assetsPath, "bin", binaryName),
+      path.join(environment.assetsPath, binaryName),
+      path.resolve(process.cwd(), "assets", "bin", binaryName),
       path.resolve(process.cwd(), "bin", binaryName),
+      path.resolve(__dirname, "..", "..", "assets", "bin", binaryName),
+      path.resolve(__dirname, "..", "..", "..", "assets", "bin", binaryName),
     ];
 
     const resolved = candidates.find((candidate) => fs.existsSync(candidate));

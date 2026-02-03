@@ -7,5 +7,5 @@ dist/
 coverage/
 
 # Keep bundled Chromaprint binaries
-!bin/
-!bin/fpcalc*
+!assets/bin/
+!assets/bin/fpcalc*
