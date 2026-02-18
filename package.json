@@ -49,8 +49,15 @@
       "type": "textfield",
       "required": false,
       "title": "Recording Duration",
-      "description": "How many seconds to record audio",
+      "description": "How many seconds to record audio (3–15)",
       "default": "15"
+    },
+    {
+      "name": "inputDevice",
+      "type": "textfield",
+      "required": false,
+      "title": "Audio Input Device",
+      "description": "Leave blank to auto-detect. On Windows: paste the exact DirectShow name shown by running `ffmpeg -list_devices true -f dshow -i dummy` in a terminal (e.g. Microphone (Realtek Audio)). On macOS: paste the AVFoundation device index shown by `ffmpeg -f avfoundation -list_devices true -i \"\"`."
     },
     {
       "name": "acoustIdApiKey",
@@ -111,7 +118,7 @@
     "@types/crypto-js": "^4.2.1",
     "@types/jest": "^29.5.11",
     "@types/node": "^22.13.10",
-    "@types/react": "^18.2.46",
+    "@types/react": "19.0.10",
     "@types/uuid": "^9.0.7",
     "eslint": "^8.56.0",
     "jest": "^29.7.0",
@@ -120,6 +127,13 @@
     "typescript": "^5.3.3"
   },
   "resolutions": {
-    "@types/node": "22.13.10"
+    "@types/node": "22.13.10",
+    "@types/react": "19.0.10"
+  },
+  "overrides": {
+    "@types/react": "19.0.10",
+    "@raycast/api": {
+      "@types/react": "19.0.10"
+    }
   }
 }

@@ -10,8 +10,10 @@
 type ExtensionPreferences = {
   /** Recognition Service - Which service to use for song recognition */
   "service": "chromaprint" | "audd" | "acrcloud",
-  /** Recording Duration - How many seconds to record audio */
+  /** Recording Duration - How many seconds to record audio (3–15) */
   "recordingDuration": string,
+  /** Audio Input Device - Leave blank to auto-detect. On Windows: paste the exact DirectShow name shown by running `ffmpeg -list_devices true -f dshow -i dummy` in a terminal (e.g. Microphone (Realtek Audio)). On macOS: paste the AVFoundation device index shown by `ffmpeg -f avfoundation -list_devices true -i ""`. */
+  "inputDevice"?: string,
   /** AcoustID API Key - Optional: Use your own key from acoustid.org/new-application */
   "acoustIdApiKey"?: string,
   /** AudD API Key - API key from audd.io (only needed if using AudD service) */
