@@ -1,3 +1,7 @@
+<p align="center">
+    <img src="./assets/icon.png" width="150" height="150" />
+</p>
+
 # Rayzam
 
 Rayzam is a Raycast music recognition extension inspired by the quick “what song is this?” flow people know from Shazam.
