@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "raycast-songsnap",
+      "name": "rayzam",
       "dependencies": {
         "@raycast/api": "^1.75.0",
         "@raycast/utils": "^1.13.0",

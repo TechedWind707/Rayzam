@@ -248,7 +248,7 @@ export default function SelectDeviceView() {
         title="Audio Input Device"
         value={currentId}            // The currently selected value
         onChange={setCurrentId}      // Called whenever the user picks a different option
-        info="The microphone or audio interface SongSnap will record from."
+        info="The microphone or audio interface Rayzam will record from."
       >
         {/* Always show "Auto-detect" at the top */}
         <Form.Dropdown.Item value={AUTO_DETECT_ID} title="🔍 Auto-detect (system default)" />

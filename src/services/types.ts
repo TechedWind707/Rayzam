@@ -10,7 +10,7 @@
  * size, toppings, address, etc.  Everyone — the cashier, the cook,
  * the delivery driver — reads the same form so nobody gets confused.
  *
- * This file is that shared form for SongSnap.  It says:
+ * This file is that shared form for Rayzam.  It says:
  *   "When you identify a song, the result MUST contain a title and
  *    artist.  It MAY also contain an album, a year, etc."
  *
@@ -23,27 +23,27 @@
 // ─── What a "just-identified" song looks like ────────────────────────────────
 //
 // RecognitionResult is the raw information that comes back from a
-// music-recognition service (AcoustID, AudD, ACRCloud, etc.).
+// music-recognition service (AudD, ACRCloud, etc.).
 //
 // The '?' after a field name means it is optional — like a bonus
 // field on the pizza form that you don't have to fill in.
 //
 export interface RecognitionResult {
-  title: string;           // Song name — always required ("Bohemian Rhapsody")
-  artist: string;          // Who made it — always required ("Queen")
-  album?: string | null;   // Which album it belongs to (optional)
-  year?: string | null;    // Release year as text, e.g. "1975" (optional)
-  genre?: string | null;   // Music genre, e.g. "Rock" (optional)
-  albumArt?: string;       // A web link to the album-cover image (optional)
-  confidence?: number;     // How sure the service is — 0.0 (no idea) to 1.0 (certain)
-  isrc?: string | null;    // A global music ID code, like a song's passport number (optional)
-  duration?: number;       // Length of the song in seconds (optional)
+  title: string; // Song name — always required ("Bohemian Rhapsody")
+  artist: string; // Who made it — always required ("Queen")
+  album?: string | null; // Which album it belongs to (optional)
+  year?: string | null; // Release year as text, e.g. "1975" (optional)
+  genre?: string | null; // Music genre, e.g. "Rock" (optional)
+  albumArt?: string; // A web link to the album-cover image (optional)
+  confidence?: number; // How sure the service is — 0.0 (no idea) to 1.0 (certain)
+  isrc?: string | null; // A global music ID code, like a song's passport number (optional)
+  duration?: number; // Length of the song in seconds (optional)
 }
 
 // ─── The contract every recognition service must follow ──────────────────────
 //
 // This is like a job description.  Any service that wants to
-// identify songs (Chromaprint, AudD, ACRCloud) MUST have a
+// identify songs (AudD, ACRCloud) MUST have a
 // 'recognize' function that takes a path to an audio file and
 // gives back a RecognitionResult.
 //
@@ -66,18 +66,28 @@ export interface RecognitionService {
 // is still there, but extra details were attached along the way.
 //
 export type SongResult = RecognitionResult & {
-  releaseYear?: number;       // Release year as a number (easier to do math with than a string)
-  albumArtUrl?: string;       // URL to the album cover image
-  spotifyId?: string;         // Spotify's internal ID for this track (used to deep-link into Spotify)
-  youtubeUrl?: string;        // A direct link to the song on YouTube
-  appleMusicUrl?: string;     // A direct link to the song on Apple Music
+  releaseYear?: number; // Release year as a number (easier to do math with than a string)
+  albumArtUrl?: string; // URL to the album cover image
+  spotifyId?: string; // Spotify's internal ID for this track (used to deep-link into Spotify)
+  youtubeUrl?: string; // A direct link to the song on YouTube
+  appleMusicUrl?: string; // A direct link to the song on Apple Music
+  alternatives?: SongResult[]; // Other provider candidates returned with the top match
   rawData?: Record<string, unknown>; // The raw, unprocessed response from the API — kept for debugging
 };
 
 // ─── Options you can pass when starting a recording ──────────────────────────
 export interface RecognitionOptions {
-  duration: number;       // How many seconds to record
-  microphone?: string;    // Which microphone to use (optional — blank = use the default)
+  duration: number; // How many seconds to record
+  microphone?: string; // Which microphone to use (optional — blank = use the default)
+}
+
+// ─── What happens after a song is identified ────────────────────────────────
+export enum PostMatchAction {
+  DETAILS = "details",
+  SPOTIFY = "spotify",
+  APPLE_MUSIC = "appleMusic",
+  YOUTUBE = "youtube",
+  YOUTUBE_MUSIC = "youtubeMusic",
 }
 
 // ─── What a song in the "Song History" list looks like ───────────────────────
@@ -86,27 +96,25 @@ export interface RecognitionOptions {
 // can look it up later in the Song History command.
 //
 export interface HistoryEntry {
-  id: string;           // A unique ID we generate for each entry (like a receipt number)
-  title: string;        // Song title
-  artist: string;       // Artist name
-  album?: string;       // Album (optional)
+  id: string; // A unique ID we generate for each entry (like a receipt number)
+  title: string; // Song title
+  artist: string; // Artist name
+  album?: string; // Album (optional)
   releaseYear?: number; // Year released (optional)
-  service: string;      // Which service recognised it ("chromaprint", "audd", etc.)
-  timestamp: number;    // When it was identified — stored as milliseconds since 1970 (Unix time)
-  confidence?: number;  // How confident the service was (optional)
+  service: string; // Which service recognised it ("acrcloud", "audd", etc.)
+  timestamp: number; // When it was identified — stored as milliseconds since 1970 (Unix time)
+  confidence?: number; // How confident the service was (optional)
+  spotifyId?: string; // Direct Spotify track ID if the provider returned one
+  youtubeUrl?: string; // Direct YouTube URL if the provider returned one
+  appleMusicUrl?: string; // Direct Apple Music URL if the provider returned one
+  albumArtUrl?: string; // Album artwork URL if the provider returned one
+  alternatives?: SongResult[]; // Other candidates returned by the provider for this identification
 }
 
 // ─── The list of available recognition services ──────────────────────────────
-//
-// An enum is like a dropdown menu with fixed choices.
-// Instead of typing the string "chromaprint" everywhere and risking
-// a typo, we use RecognitionServiceType.CHROMAPRINT — TypeScript
-// then checks that it's one of the allowed values.
-//
 export enum RecognitionServiceType {
-  CHROMAPRINT = "chromaprint", // Free, uses AcoustID database
-  ACRCLOUD    = "acrcloud",    // Paid, very accurate
-  AUDD        = "audd",        // Freemium, 600 free identifications/day
+  ACRCLOUD = "acrcloud", // Professional-grade recognition
+  AUDD = "audd", // Freemium recognition API
 }
 
 // ─── A custom error for when song recognition fails ──────────────────────────
@@ -118,9 +126,9 @@ export enum RecognitionServiceType {
 //
 export class RecognitionError extends Error {
   constructor(
-    message: string,                        // Human-readable description of what went wrong
+    message: string, // Human-readable description of what went wrong
     public service: RecognitionServiceType, // Which service was being used
-    public originalError?: Error            // The underlying technical error (for debugging)
+    public originalError?: Error // The underlying technical error (for debugging)
   ) {
     // Call the parent Error class so this behaves like a normal error
     super(`[${service}] ${message}`);
@@ -136,7 +144,7 @@ export class RecognitionError extends Error {
 //
 export class AudioRecordingError extends Error {
   constructor(
-    message: string,             // What went wrong
+    message: string, // What went wrong
     public originalError?: Error // The underlying technical error
   ) {
     super(message);

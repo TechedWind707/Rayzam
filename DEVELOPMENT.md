@@ -5,8 +5,8 @@
 ### Setup
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/raycast-songsnap.git
-cd raycast-songsnap
+git clone https://github.com/yourusername/rayzam.git
+cd rayzam
 
 # Install dependencies
 npm install
@@ -40,7 +40,7 @@ Services are created via the `ServiceFactory` which handles configuration:
 
 ```typescript
 const service = ServiceFactory.createService({
-  service: RecognitionService.SHAZAMIO,
+  service: RecognitionService.ACRCLOUD,
   // ... credentials if needed
 });
 ```
@@ -48,7 +48,7 @@ const service = ServiceFactory.createService({
 ### Storage Layer (`src/storage/`)
 - `HistoryDatabase`: JSON file-based storage
 - Stores up to 500 most recent songs
-- Location: `~/.config/songsnap/history.json`
+- Location: `~/.config/rayzam/history.json`
 - Supports search, export (JSON/CSV), and deletion
 
 ### UI Layer (`src/commands/`)
@@ -198,7 +198,7 @@ describe("MyNewService", () => {
 // RecognitionError
 throw new RecognitionError(
   "No matches found",
-  RecognitionService.SHAZAMIO,
+  RecognitionService.ACRCLOUD,
   originalError
 );
 
@@ -257,7 +257,7 @@ console.log("Debug info:", data);
 
 **Issue**: Performance slow
 - Check network latency
-- Consider using faster service (ACRCloud > AudD > Shazamio)
+- Try the other configured recognition provider
 - Increase recording duration
 
 ## Release Checklist
@@ -288,4 +288,4 @@ console.log("Debug info:", data);
 
 ---
 
-Built with ❤️ for developers who want to identify music without leaving their keyboard.
+Built with ❤️ for users who want to identify music without leaving their keyboard.

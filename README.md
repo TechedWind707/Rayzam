@@ -1,344 +1,131 @@
-# 🎵 SongSnap - Shazam for Raycast
+# Rayzam
 
-**Instant music recognition without leaving your workflow.** Hit a keyboard shortcut, let SongSnap listen for a few seconds, and instantly get song details—all directly in Raycast.
+Rayzam is a Raycast music recognition extension inspired by the quick “what song is this?” flow people know from Shazam.
 
-## 🎯 What It Does
-
-SongSnap brings Shazam-like music recognition to Raycast. Perfect for when you're focused on work but hear a song you want to identify—no need to switch apps or grab your phone.
-
-**Before SongSnap:**
-- 🎧 Hear a song → open phone → open Shazam → wait → identify → switch back
-
-**With SongSnap:**
-- 🎵 Cmd+Space → "Identify Song" → **Result in 5 seconds**
-
-## ✨ Features
-
-### Core Functionality
-- **🎤 One-Command Recognition**: Trigger identification with a single keyboard shortcut
-- **⚡ Fast**: < 10 seconds from trigger to result
-- **✅ Accurate**: 95%+ match rate with official Shazam
-- **🔄 Zero Config**: Works immediately with Shazamio (no API key needed)
-
-### Multiple Recognition Services
-- **Shazamio** (Default) - Free, no authentication required
-- **ACRCloud** (Optional) - Professional-grade accuracy, bring your own API key
-- **AudD** (Optional) - Official API, bring your own API key
-
-### Smart Features
-- **📋 History Tracking**: All identified songs saved locally
-- **🔍 Search History**: Find any song you've identified
-- **🎵 Quick Actions**: Open in Spotify, Apple Music, YouTube with one click
-- **📤 Export**: Download your history as JSON or CSV
-- **🎨 Rich Display**: Album artwork and metadata when available
-
-### Preferences
-- Choose your recognition service
-- Configure API credentials (if using ACRCloud or AudD)
-- Adjust recording duration (3-15 seconds)
-- Select microphone (default system microphone)
-
-## 🚀 Installation
-
-### Requirements
-- Raycast (v1.75+)
-- Node.js 16+
-- macOS or Windows
-- System audio input (microphone)
-
-### Quick Install
-
-1. **Clone this repository**
-   ```bash
-   git clone https://github.com/yourusername/raycast-songsnap.git
-   cd raycast-songsnap
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Add to Raycast**
-   - Open Raycast
-   - Press `Cmd+,` (or `Ctrl+,` on Windows) for preferences
-   - Click "Extensions"
-   - Click the "+" button
-   - Select "Add Script Directory"
-   - Point to your `raycast-songsnap` folder
-
-## ⚙️ Configuration
-
-### Shazamio (Default - No Setup Needed!)
-Shazamio works out of the box. No API key required.
-
-### ACRCloud (Optional)
-
-1. Visit [ACRCloud.com](https://www.acrcloud.com/)
-2. Sign up for a free trial (14 days)
-3. Get your **Access Key** and **Access Secret**
-4. In Raycast preferences → SongSnap:
-   - Set "Recognition Service" to "ACRCloud"
-   - Paste your Access Key
-   - Paste your Access Secret
-
-### AudD (Optional)
-
-1. Visit [AudD.io](https://www.audd.io/)
-2. Sign up for free account (300 free identifications)
-3. Get your **API Token**
-4. In Raycast preferences → SongSnap:
-   - Set "Recognition Service" to "AudD"
-   - Paste your API Token
-
-## 🎮 Usage
-
-### Command 1: Identify Song
-
-```bash
-Cmd + Space → "Identify Song"
-```
-
-1. Extension starts recording
-2. Waits 5 seconds (or your configured duration)
-3. Sends audio to recognition service
-4. Displays song details:
-   - 🎵 Title
-   - 👤 Artist
-   - 💿 Album
-   - 📅 Release Year
-   - ⏱️ Duration
-   - 🎯 Match Confidence
-
-### Available Actions
-
-From any song result:
-
-| Action | Description |
-|--------|-------------|
-| **Open in Spotify** | Direct link to Spotify (if track ID available) |
-| **Search on Spotify** | Search Spotify for the song |
-| **Open in Apple Music** | Search Apple Music |
-| **Watch on YouTube** | Search for music video |
-| **Copy Song Details** | Copy formatted info to clipboard |
-| **Identify Another Song** | Quickly identify another track |
-
-### Command 2: Song History
-
-```bash
-Cmd + Space → "Song History"
-```
-
-Browse all your past identifications:
-- **View Details**: See full metadata for any song
-- **Search**: Find songs by title or artist
-- **Export**: Download your entire history as JSON/CSV
-- **Delete**: Remove individual entries
-- **Time Display**: Shows "2 minutes ago", "1 hour ago", etc.
-
-## 📊 History Storage
-
-Your history is stored locally in:
-```
-~/.config/songsnap/history.json
-```
-
-- Completely private (stays on your machine)
-- Last 500 songs maintained
-- Exportable as JSON or CSV
-- Timestamps and service information preserved
-
-## 🏗️ Project Structure
-
-```
-raycast-songsnap/
-├── src/
-│   ├── services/              # Recognition service implementations
-│   │   ├── types.ts          # Core interfaces and types
-│   │   ├── recorder.ts       # Cross-platform audio recording
-│   │   ├── shazamio.ts       # Shazamio API client
-│   │   ├── acrcloud.ts       # ACRCloud API client
-│   │   ├── audd.ts           # AudD API client
-│   │   └── index.ts          # Service factory
-│   ├── storage/               # Data persistence
-│   │   └── database.ts       # History management (JSON-based)
-│   ├── utils/                 # Utilities
-│   │   ├── actions.ts        # Action handlers (Spotify, YouTube, etc.)
-│   │   └── preferences.ts    # Preference management
-│   ├── commands/              # Raycast commands
-│   │   ├── identify-song.tsx # Main identification command
-│   │   └── song-history.tsx  # History browser command
-│   └── services/__tests__/   # Unit tests
-├── assets/                    # Icons and images
-├── package.json              # Dependencies and scripts
-├── tsconfig.json             # TypeScript configuration
-└── README.md                 # This file
-```
-
-## 🧪 Testing
-
-Run all tests:
-```bash
-npm test
-```
-
-Watch mode for development:
-```bash
-npm run test:watch
-```
-
-View coverage:
-```bash
-npm test -- --coverage
-```
-
-Target: **80%+ code coverage**
-
-Tests cover:
-- ✅ Audio recording across platforms
-- ✅ API service implementations
-- ✅ Error handling and edge cases
-- ✅ History database operations
-- ✅ Utility functions and formatting
-
-## 🛠️ Development
-
-### Setup Development Environment
-
-```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# TypeScript type checking
-npx tsc --noEmit
-
-# Code formatting
-npm run format
-
-# Linting
-npm run lint
-```
-
-### Adding a New Recognition Service
-
-1. Create a new service class implementing `MusicRecognitionService` interface
-2. Add it to `ServiceFactory` in `src/services/index.ts`
-3. Add preference fields to `package.json`
-4. Add tests in `src/services/__tests__/`
-
-Example:
-```typescript
-// src/services/mynewservice.ts
-export class MyServiceProvider implements MusicRecognitionService {
-  async recognize(audioBuffer: Buffer): Promise<SongResult> {
-    // Implementation
-  }
-}
-```
-
-## 🔐 Privacy & Security
-
-- **No Cloud Storage**: All history stays on your machine
-- **No Tracking**: Doesn't collect any usage data
-- **API Keys**: Stored securely in Raycast's preference system
-- **Audio**: Never stored or transmitted except to recognition service
-- **Open Source**: Review the code anytime
-
-## ⚠️ Permissions
-
-The extension requires:
-- **Microphone Access**: To record audio for identification
-- **File System Access**: To store history locally
-
-These permissions are necessary for functionality and requested at first use.
-
-## 🐛 Troubleshooting
-
-### "Microphone not found"
-- Check system audio input settings
-- Verify microphone is connected and enabled
-- Try a different microphone if available
-
-### "No matches found"
-- Ensure audio is playing clearly
-- Try increasing recording duration in preferences
-- Switch to ACRCloud for better accuracy
-- Check internet connection
-
-### "API credentials invalid"
-- Double-check your API key/secret from the service
-- Ensure credentials haven't expired
-- For ACRCloud: check if trial is still active
-- For AudD: verify account has remaining credits
-
-### "Failed to load command User cancelled"
-See **[DEBUGGING.md](./DEBUGGING.md)** for detailed troubleshooting steps and how to read logs.
-
-### History not saving
-- Check folder permissions: `~/.config/songsnap/`
-- Ensure disk has free space
-- Try deleting old history and starting fresh
-
-## 📖 Debugging & Logs
-
-**[See DEBUGGING.md](./DEBUGGING.md)** for:
-- How to view logs in Raycast
-- Common errors and solutions
-- Platform-specific troubleshooting
-- Performance debugging
-- Advanced troubleshooting techniques
-
-## 📈 Performance
-
-- **Recording**: < 5-15 seconds (configurable)
-- **API Call**: < 5 seconds (typically 1-2 seconds)
-- **Display**: < 1 second
-- **Total**: ~6-21 seconds end-to-end
-
-## 🎯 Future Enhancements
-
-- [ ] Lyrics display in Raycast
-- [ ] Auto-create Spotify playlists from history
-- [ ] Continuous listening mode
-- [ ] Social sharing (Discord, Slack, Twitter)
-- [ ] Local audio fingerprinting (ML-based)
-- [ ] Browser extension companion
-- [ ] Batch history analysis
-- [ ] Integration with music streaming APIs
-
-## 📝 License
-
-MIT License - See LICENSE file for details
-
-## 🙏 Contributing
-
-Contributions welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 🤝 Support
-
-- **Issues**: Found a bug? [Create an issue](https://github.com/yourusername/raycast-songsnap/issues)
-- **Discussions**: Have questions? [Start a discussion](https://github.com/yourusername/raycast-songsnap/discussions)
-- **Twitter**: [@yourhandle](https://twitter.com)
-
-## 🙌 Acknowledgments
-
-Built with:
-- [Raycast](https://www.raycast.com/) - Powerful productivity launcher
-- [Shazamio](https://github.com/dotzenith/ShazamIO) - Unofficial Shazam API
-- [ACRCloud](https://www.acrcloud.com/) - Professional music recognition
-- [AudD](https://www.audd.io/) - Music recognition API
-
----
-
-**Made with ❤️ using GitHub Copilot CLI**
-
-Have a song stuck in your head? Get answers instantly with SongSnap! 🎵
+Rayzam as in Raycast + Shazam, do you get it? 😁
+
+Identify songs from Raycast, save the result to local history, and jump straight to Spotify, Apple Music, YouTube Music, or YouTube.
+
+## Requirements
+
+- Raycast
+- `ffmpeg` available on your PATH
+- ACRCloud credentials if you use ACRCloud
+- AudD API token if you want to switch to AudD
+- Microphone permission for Raycast
+
+## Pricing Note
+
+Rayzam does not include a shared recognition account. You bring your own provider credentials.
+
+ACRCloud usually starts with a 14-day trial. After the trial, ACRCloud is pay-as-you-go; check the pricing page in your ACRCloud Console while logged in for the exact rate for your project. The final price can change based on options such as the `ACRCloud Music` bucket and third-party ID integrations like Spotify or YouTube.
+
+AudD usually starts with a 14-day trial where you have 300 free requests and has its own pricing after the trial and account limits. Check your AudD dashboard for the current terms on your account.
+
+## Setup
+
+1. Install dependencies with `npm install`.
+2. Run `npm run dev` during development, or install the extension in Raycast.
+3. Open Raycast preferences, choose Rayzam, and fill in credentials for the provider you want to use.
+4. Set a recording duration. `15` seconds is a good starting point.
+
+## ACRCloud Setup
+
+Rayzam uses your own ACRCloud Audio & Video Recognition project.
+
+1. Create an account at <https://console.acrcloud.com>.
+2. Open **Audio & Video Recognition** from Products or the Projects sidebar.
+
+![ACRCloud Audio & Video Recognition product](./assets/acrcloud-product.png)
+
+![ACRCloud Audio & Video Recognition sidebar](./assets/acrcloud-sidebar.png)
+
+3. Click **Create Project**.
+
+![ACRCloud Create Project button](./assets/acrcloud-create-project.png)
+
+4. Use these project settings:
+
+| Setting                  | Recommended value                                            |
+| ------------------------ | ------------------------------------------------------------ |
+| Project Name             | `Rayzam` or any name you like                                |
+| Audio Source             | `Recorded Audio`                                             |
+| Audio Engine             | `Audio Fingerprinting & Cover Song (Humming) Identification` |
+| Buckets                  | `ACRCloud Music`                                             |
+| 3rd Party ID Integration | Enable `spotify`, `deezer`, `youtube`, and `isrc`            |
+
+![ACRCloud recommended project settings](./assets/acrcloud-settings.png)
+
+5. Copy `Host`, `Access Key`, and `Secret Key` from the same project.
+6. Paste all three values into Raycast Preferences -> Extensions -> Rayzam.
+
+If credentials are mixed between projects or regions, ACRCloud can reject requests with `invalid signature`.
+
+### Recommended ACRCloud Integrations
+
+Rayzam works best when these ACRCloud third-party integrations are enabled:
+
+- `spotify`: gives Rayzam a direct Spotify track ID.
+- `deezer`: gives Rayzam a Deezer album ID, which can be used to fetch album artwork without the separate ACRCloud Metadata API.
+- `youtube`: gives Rayzam a YouTube video ID and a last-resort thumbnail fallback.
+- `isrc`: gives Rayzam a stable recording code that can help future metadata lookups.
+
+If you only enable Spotify and YouTube, recognition still works, but album artwork may be missing unless ACRCloud returns it directly or you configure the optional Metadata API token.
+
+### Optional ACRCloud Artwork
+
+ACRCloud recognition responses often include only IDs for Spotify, YouTube, or Deezer. Album artwork usually comes from ACRCloud's separate Metadata API.
+
+To enable richer artwork for ACRCloud matches:
+
+1. In ACRCloud Console, open **Developer Settings**.
+2. Create an API token.
+3. Paste it into **ACRCloud Metadata API Token** in Raycast Preferences -> Extensions -> Rayzam.
+
+Leave **ACRCloud Metadata API Host** empty unless your account uses a different metadata API host.
+
+## AudD Setup
+
+1. Create or sign in to an AudD account at <https://audd.io>.
+2. Copy your API token from the AudD dashboard.
+3. Paste it into **AudD API Key** in Raycast Preferences -> Extensions -> Rayzam.
+
+AudD is useful for original song playback. For singing and humming, use ACRCloud.
+
+Rayzam asks AudD for `apple_music,spotify,deezer` metadata. In practice:
+
+- `apple_music` usually gives a direct Apple Music URL and high-quality artwork.
+- `spotify` usually gives a direct Spotify track ID and album images.
+- `deezer` can be used as an extra artwork fallback when available.
+
+You only need to configure the provider you plan to use. If you start recording with a selected provider that has missing credentials, Rayzam will notify you of it.
+
+## Commands
+
+### Identify Song
+
+Records a short audio sample, sends it to the selected recognition provider, then shows the best match with quick actions. ACRCloud is recommended for singing and humming; AudD is best for original playback.
+
+### Song History
+
+Shows previous matches stored locally in Raycast, with actions for Spotify, Apple Music, YouTube Music, YouTube, copy, export, and delete.
+
+## Save Audio on device
+
+This is optional. Enable **Save audio recordings** in Rayzam preferences and choose a folder with the directory picker. If the selected folder is unavailable, Rayzam saves the audio in its Raycast support folder.
+
+## Save full response from recognition service
+
+This is optional. Enable **Save recognition JSON responses** in Rayzam preferences and choose a folder with the directory picker.
+If the selected folder is unavailable, Rayzam saves the audio in its Raycast support folder.
+
+## Privacy
+
+Rayzam stores history locally in Raycast. Recorded audio is only sent to the recognition provider you configure and a copy will be saved to your device if you enable audio saving.
+
+## Troubleshooting
+
+- No match: try a clearer source, raise the duration to at least `15` seconds, or use ACRCloud.
+- Missing microphone: check OS microphone permissions and the Rayzam input device preference.
+- ACRCloud error: confirm `Host`, `Access Key`, and `Secret Key` all come from the same project.
+- Enable the **Save recognition JSON responses** option in the preferences and check the files to see the response being returned by the recognition service

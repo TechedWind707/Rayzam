@@ -1,9 +1,9 @@
 {
-  "name": "raycast-songsnap",
-  "title": "SongSnap - Shazam for Raycast",
-  "description": "Music recognition extension for Raycast. Identify songs instantly without leaving your workflow.",
+  "name": "rayzam",
+  "title": "Rayzam",
+  "description": "Identify songs from your microphone with chosen recognition service, open them in your music apps and save searchable song history.",
   "icon": "icon.png",
-  "author": "SongSnap Team",
+  "author": "chizitere_david",
   "license": "MIT",
   "commands": [
     {
@@ -28,18 +28,14 @@
       "required": false,
       "title": "Recognition Service",
       "description": "Which service to use for song recognition",
-      "default": "chromaprint",
+      "default": "acrcloud",
       "data": [
         {
-          "title": "Chromaprint (FREE, unlimited, 80-85% accuracy)",
-          "value": "chromaprint"
-        },
-        {
-          "title": "AudD (Requires API key, 600/day free, 90-95% accuracy)",
+          "title": "AudD (Recommended for only real playback, 90-95% accuracy)",
           "value": "audd"
         },
         {
-          "title": "ACRCloud (Requires API key, paid, 95%+ accuracy)",
+          "title": "ACRCloud (Recommended for both playback and humming, 95%+ accuracy)",
           "value": "acrcloud"
         }
       ]
@@ -49,8 +45,79 @@
       "type": "textfield",
       "required": false,
       "title": "Recording Duration",
-      "description": "How many seconds to record audio (3–15)",
+      "description": "How many seconds to record audio (10–30)",
       "default": "15"
+    },
+    {
+      "name": "enableDebugAudio",
+      "type": "checkbox",
+      "required": false,
+      "title": "Save Debug Audio",
+      "description": "Save a copy of each recording for troubleshooting audio capture issues",
+      "label": "Save audio recordings",
+      "default": false
+    },
+    {
+      "name": "debugAudioDirectory",
+      "type": "directory",
+      "required": false,
+      "title": "Saved Audio Directory",
+      "description": "Folder where audio recordings are saved. If unavailable, Rayzam uses its Raycast support folder."
+    },
+    {
+      "name": "enableDebugJson",
+      "type": "checkbox",
+      "required": false,
+      "title": "Save Debug JSON",
+      "description": "Save the raw JSON returned by your selected recognition service for troubleshooting matches.",
+      "label": "Save recognition JSON responses",
+      "default": false
+    },
+    {
+      "name": "debugJsonDirectory",
+      "type": "directory",
+      "required": false,
+      "title": "Saved JSON Directory",
+      "description": "Folder where raw recognition JSON responses are saved. If unavailable, Rayzam uses its Raycast support folder."
+    },
+    {
+      "name": "saveAlternativeMatches",
+      "type": "checkbox",
+      "required": false,
+      "title": "Save Alternative Matches",
+      "description": "Save other recognition candidates returned by the provider so they can be reviewed from Song History.",
+      "label": "Save alternate recognition candidates",
+      "default": false
+    },
+    {
+      "name": "postMatchAction",
+      "type": "dropdown",
+      "required": false,
+      "title": "Post-Match Action",
+      "description": "What to do automatically after a song is identified",
+      "default": "details",
+      "data": [
+        {
+          "title": "Show Details Only",
+          "value": "details"
+        },
+        {
+          "title": "Open in Spotify",
+          "value": "spotify"
+        },
+        {
+          "title": "Open in Apple Music",
+          "value": "appleMusic"
+        },
+        {
+          "title": "Search on YouTube",
+          "value": "youtube"
+        },
+        {
+          "title": "Search on YouTube Music",
+          "value": "youtubeMusic"
+        }
+      ]
     },
     {
       "name": "inputDevice",
@@ -60,40 +127,48 @@
       "description": "Leave blank to auto-detect. On Windows: paste the exact DirectShow name shown by running `ffmpeg -list_devices true -f dshow -i dummy` in a terminal (e.g. Microphone (Realtek Audio)). On macOS: paste the AVFoundation device index shown by `ffmpeg -f avfoundation -list_devices true -i \"\"`."
     },
     {
-      "name": "acoustIdApiKey",
-      "type": "password",
-      "required": false,
-      "title": "AcoustID API Key",
-      "description": "Optional: Use your own key from acoustid.org/new-application"
-    },
-    {
       "name": "auddApiKey",
       "type": "password",
       "required": false,
       "title": "AudD API Key",
-      "description": "API key from audd.io (only needed if using AudD service)"
+      "description": "API token from audd.io, used when you choose AudD as the recognition service."
     },
     {
       "name": "acrcloudAccessKey",
       "type": "password",
       "required": false,
       "title": "ACRCloud Access Key",
-      "description": "Access key from acrcloud.com (only needed if using ACRCloud)"
+      "description": "Access key from your ACRCloud Audio & Video Recognition project"
     },
     {
       "name": "acrcloudAccessSecret",
       "type": "password",
       "required": false,
       "title": "ACRCloud Access Secret",
-      "description": "Access secret from acrcloud.com (only needed if using ACRCloud)"
+      "description": "Secret key from the same ACRCloud project as your access key"
     },
     {
       "name": "acrcloudHost",
       "type": "textfield",
       "required": false,
       "title": "ACRCloud Host",
-      "description": "ACRCloud host endpoint (only needed if using ACRCloud)",
-      "default": "identify-eu-west-1.acrcloud.com"
+      "description": "Host from the same ACRCloud project as your access key and secret key.",
+      "placeholder": "identify-eu-west-1.acrcloud.com"
+    },
+    {
+      "name": "acrcloudMetadataToken",
+      "type": "password",
+      "required": false,
+      "title": "ACRCloud Metadata API Token",
+      "description": "Optional Bearer token from ACRCloud Developer Settings. Used to fetch artwork and richer platform metadata."
+    },
+    {
+      "name": "acrcloudMetadataHost",
+      "type": "textfield",
+      "required": false,
+      "title": "ACRCloud Metadata API Host",
+      "description": "Optional ACRCloud Metadata API host. Leave empty to use eu-api-v2.acrcloud.com.",
+      "placeholder": "eu-api-v2.acrcloud.com"
     }
   ],
   "version": "1.0.0",
@@ -102,15 +177,16 @@
     "build": "ray build -e dist",
     "test": "jest",
     "test:watch": "jest --watch",
-    "lint": "eslint src",
-    "format": "prettier --write \"src/**/*.{ts,tsx}\""
+    "lint": "eslint \"src/**/*.{ts,tsx}\" --ignore-pattern \"src/**/__tests__/**\" --ignore-pattern \"src/__mocks__/**\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "publish": "npx @raycast/api@latest publish"
   },
   "dependencies": {
-    "@raycast/api": "^1.75.0",
-    "@raycast/utils": "^1.13.0",
+    "@raycast/api": "^1.104.16",
+    "@raycast/utils": "^2.2.4",
     "axios": "^1.6.8",
     "crypto-js": "^4.2.0",
-    "node-fetch": "3.3.2",
+    "form-data": "^4.0.0",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
@@ -135,5 +211,13 @@
     "@raycast/api": {
       "@types/react": "19.0.10"
     }
-  }
+  },
+  "categories": [
+    "Media",
+    "Fun"
+  ],
+  "platforms": [
+    "macOS",
+    "Windows"
+  ]
 }

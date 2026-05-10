@@ -1,4 +1,4 @@
-# 🔨 Build Guide - SongSnap
+# 🔨 Build Guide - Rayzam
 
 ## What Was Fixed
 
@@ -160,7 +160,7 @@ npx tsc
 ### GitHub Actions Example
 
 ```yaml
-name: Build SongSnap
+name: Build Rayzam
 
 on: [push, pull_request]
 
@@ -200,8 +200,8 @@ jobs:
 
 - [Raycast Extension Development](https://developers.raycast.com)
 - [TypeScript Documentation](https://www.typescriptlang.org/docs/)
-- [SongSnap DEBUGGING.md](./DEBUGGING.md)
-- [SongSnap DEVELOPMENT.md](./DEVELOPMENT.md)
+- [Rayzam DEBUGGING.md](./DEBUGGING.md)
+- [Rayzam DEVELOPMENT.md](./DEVELOPMENT.md)
 
 ---
 

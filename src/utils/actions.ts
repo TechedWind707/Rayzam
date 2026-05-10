@@ -23,9 +23,80 @@
 // 'showHUD' shows a quick notification at the top of the screen
 // 'Clipboard' lets us copy text to the system clipboard
 import { open, showHUD, Clipboard } from "@raycast/api";
+import { exec } from "child_process";
+import { promisify } from "util";
 
 // Import the SongResult type so TypeScript knows what shape of data we expect
-import { SongResult } from "../services/types";
+import { PostMatchAction, SongResult } from "../services/types";
+
+const execAsync = promisify(exec);
+
+async function openWithFallback(primaryUrl: string, fallbackUrl: string): Promise<void> {
+  try {
+    await open(primaryUrl);
+  } catch {
+    await open(fallbackUrl);
+  }
+}
+
+function normalizeSearchPart(part: string): string {
+  try {
+    return decodeURIComponent(part.replace(/\+/g, " "));
+  } catch {
+    return part.replace(/\+/g, " ");
+  }
+}
+
+function createSearchTerm(...parts: Array<string | undefined>): string {
+  return parts
+    .filter((part): part is string => Boolean(part))
+    .map(normalizeSearchPart)
+    .join(" ")
+    .replace(/\+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function createSearchQuery(...parts: Array<string | undefined>): string {
+  return encodeURIComponent(createSearchTerm(...parts));
+}
+
+function removeAppleMusicStorefront(url: string): string {
+  return url.replace(/music\.apple\.com\/[a-z]{2}\//i, "music.apple.com/");
+}
+
+async function findAppleMusicTrackUrl(title: string, artist: string): Promise<string | undefined> {
+  try {
+    const query = createSearchQuery(title, artist);
+    const response = await fetch(
+      `https://itunes.apple.com/search?term=${query}&entity=song&limit=1`
+    );
+    const data = (await response.json()) as {
+      results?: Array<{
+        trackViewUrl?: string;
+      }>;
+    };
+    const trackViewUrl = data.results?.[0]?.trackViewUrl;
+    return trackViewUrl ? removeAppleMusicStorefront(trackViewUrl) : undefined;
+  } catch (err) {
+    console.warn("[Actions] Failed to look up Apple Music track URL:", err);
+    return undefined;
+  }
+}
+
+async function openAppleMusicUrl(webUrl: string): Promise<void> {
+  if (process.platform !== "darwin") {
+    await open(webUrl);
+    return;
+  }
+
+  try {
+    await execAsync(`osascript -e 'id of app "Music"'`);
+    await open(webUrl.replace("https://", "music://"));
+  } catch {
+    await open(webUrl);
+  }
+}
 
 // ─── Open in Spotify ─────────────────────────────────────────────────────────
 
@@ -38,15 +109,19 @@ import { SongResult } from "../services/types";
  *   2. Otherwise, search Spotify using the artist and title — like
  *      typing into Spotify's search bar for you.
  */
-export async function openInSpotify(spotifyId?: string, artist?: string, title?: string): Promise<void> {
+export async function openInSpotify(
+  spotifyId?: string,
+  artist?: string,
+  title?: string
+): Promise<void> {
   if (spotifyId) {
     // "spotify:track:ID" is a special Spotify URI that opens the app straight to that track
     await open(`spotify:track:${spotifyId}`);
   } else if (artist && title) {
     // encodeURIComponent makes the search term safe for a URL
     // (e.g. spaces become %20, & becomes %26, etc.)
-    const query = encodeURIComponent(`${title} ${artist}`);
-    await open(`https://open.spotify.com/search/${query}`);
+    const query = createSearchQuery(title, artist);
+    await openWithFallback(`spotify:search:${query}`, `https://open.spotify.com/search/${query}`);
   }
 }
 
@@ -59,12 +134,32 @@ export async function openInSpotify(spotifyId?: string, artist?: string, title?:
  *   1. We have a direct Apple Music URL → open it.
  *   2. We don't → build a search URL using artist + title.
  */
-export async function openInAppleMusic(appleMusicUrl?: string, artist?: string, title?: string): Promise<void> {
+export async function openInAppleMusic(
+  appleMusicUrl?: string,
+  artist?: string,
+  title?: string
+): Promise<void> {
   if (appleMusicUrl) {
-    await open(appleMusicUrl);
+    if (appleMusicUrl.includes("music.apple.com") && appleMusicUrl.includes("/search")) {
+      try {
+        const url = new URL(appleMusicUrl);
+        const term = url.searchParams.get("term");
+        if (term) {
+          url.pathname = "/search";
+          url.searchParams.set("term", normalizeSearchPart(term));
+          await openAppleMusicUrl(removeAppleMusicStorefront(url.toString()).replace(/\+/g, "%20"));
+          return;
+        }
+      } catch {
+        // Fall through to opening the original provider URL.
+      }
+    }
+
+    await openAppleMusicUrl(removeAppleMusicStorefront(appleMusicUrl));
   } else if (artist && title) {
-    const query = encodeURIComponent(`${title} ${artist}`);
-    await open(`https://music.apple.com/search?term=${query}`);
+    const trackUrl = await findAppleMusicTrackUrl(title, artist);
+    const fallbackUrl = `https://music.apple.com/search?term=${createSearchQuery(title, artist)}`;
+    await openAppleMusicUrl(trackUrl ?? fallbackUrl);
   }
 }
 
@@ -77,12 +172,47 @@ export async function openInAppleMusic(appleMusicUrl?: string, artist?: string, 
  *   1. Direct YouTube URL → open it.
  *   2. No URL → search YouTube.
  */
-export async function openInYouTube(youtubeUrl?: string, artist?: string, title?: string): Promise<void> {
+export async function openInYouTube(
+  youtubeUrl?: string,
+  artist?: string,
+  title?: string
+): Promise<void> {
   if (youtubeUrl) {
     await open(youtubeUrl);
   } else if (artist && title) {
-    const query = encodeURIComponent(`${title} ${artist}`);
+    const query = createSearchQuery(title, artist);
     await open(`https://www.youtube.com/results?search_query=${query}`);
+  }
+}
+
+// ─── Open in YouTube Music ──────────────────────────────────────────────────
+
+export async function openInYouTubeMusic(artist?: string, title?: string): Promise<void> {
+  if (artist && title) {
+    const query = createSearchQuery(title, artist);
+    await open(`https://music.youtube.com/search?q=${query}`);
+  }
+}
+
+// ─── Auto action after recognition ──────────────────────────────────────────
+
+export async function runPostMatchAction(song: SongResult, action: PostMatchAction): Promise<void> {
+  switch (action) {
+    case PostMatchAction.SPOTIFY:
+      await openInSpotify(song.spotifyId, song.artist, song.title);
+      break;
+    case PostMatchAction.APPLE_MUSIC:
+      await openInAppleMusic(song.appleMusicUrl, song.artist, song.title);
+      break;
+    case PostMatchAction.YOUTUBE:
+      await openInYouTube(song.youtubeUrl, song.artist, song.title);
+      break;
+    case PostMatchAction.YOUTUBE_MUSIC:
+      await openInYouTubeMusic(song.artist, song.title);
+      break;
+    case PostMatchAction.DETAILS:
+    default:
+      break;
   }
 }
 
@@ -102,7 +232,7 @@ export async function openInYouTube(youtubeUrl?: string, artist?: string, title?
  */
 export async function copySongDetails(song: SongResult): Promise<void> {
   const details = formatSongDetails(song); // Build the text block
-  await Clipboard.copy(details);           // Put it in the clipboard
+  await Clipboard.copy(details); // Put it in the clipboard
   await showHUD("✓ Song details copied to clipboard"); // Show a brief confirmation
 }
 
@@ -119,10 +249,7 @@ export async function copySongDetails(song: SongResult): Promise<void> {
  */
 export function formatSongDetails(song: SongResult): string {
   // Start with the required fields
-  const lines = [
-    `🎵 ${song.title}`,
-    `👤 ${song.artist}`,
-  ];
+  const lines = [`🎵 ${song.title}`, `👤 ${song.artist}`];
 
   // Optional fields — only add them if the data is present
   if (song.album) {
@@ -165,40 +292,10 @@ export function formatSongDetails(song: SongResult): string {
  */
 export function createMarkdownView(song: SongResult): string {
   // Use # for a large title and ## for a slightly smaller sub-title
-  const lines = [
-    `# 🎵 ${song.title}`,
-    `## 👤 ${song.artist}`,
-  ];
+  const lines = [`# 🎵 ${song.title}`, `## 👤 ${song.artist}`];
 
-  // If there's an album-art image URL, embed it as a Markdown image
-  // Syntax: ![alt text](URL)
   if (song.albumArtUrl) {
-    lines.push(`![Album Art](${song.albumArtUrl})`);
-  }
-
-  // Bold labels using ** around the label text
-  if (song.album) {
-    lines.push(`**Album:** ${song.album}`);
-  }
-
-  if (song.releaseYear) {
-    lines.push(`**Released:** ${song.releaseYear}`);
-  }
-
-  if (song.duration) {
-    const minutes = Math.floor(song.duration / 60);
-    const seconds = song.duration % 60;
-    lines.push(`**Duration:** ${minutes}:${seconds.toString().padStart(2, "0")}`);
-  }
-
-  if (song.isrc) {
-    // ISRC = International Standard Recording Code — a unique ID for every recording
-    lines.push(`**ISRC:** ${song.isrc}`);
-  }
-
-  if (song.confidence !== undefined) {
-    // toFixed(1) gives one decimal place, e.g. "97.3%"
-    lines.push(`**Match Confidence:** ${(song.confidence * 100).toFixed(1)}%`);
+    lines.push(`<img src="${song.albumArtUrl}" width="180" />`);
   }
 
   // Join lines with a BLANK LINE between each so Markdown renders them as separate paragraphs

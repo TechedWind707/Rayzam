@@ -5,7 +5,7 @@
 ### Added
 - **Core Functionality**
   - Audio recording with cross-platform support (macOS & Windows)
-  - Three recognition services: Shazamio (free), ACRCloud (professional), AudD (API-based)
+  - Two bring-your-own-key recognition services: ACRCloud and AudD
   - Song identification with < 10 second response time
   - Rich metadata display (title, artist, album, year, duration, confidence)
 
@@ -45,7 +45,6 @@
 - **Storage**: JSON-based local history (no database required)
 - **Audio**: Cross-platform recording with ffmpeg/sox
 - **APIs**: 
-  - Shazamio: Unofficial reverse-engineered API
   - ACRCloud: Official music recognition API
   - AudD: Official music identification API
 
@@ -63,8 +62,8 @@
 
 ### Known Limitations
 - Requires microphone access permission
-- Shazamio may have occasional rate limiting
-- ACRCloud and AudD require user API credentials
+- ACRCloud and AudD require user-provided API credentials
+- ACRCloud pricing depends on the user's own project settings and ACRCloud Console pricing page
 - History limited to 500 most recent songs
 
 ### Future Roadmap

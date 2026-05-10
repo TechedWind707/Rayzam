@@ -12,7 +12,7 @@
  *
  * Think of it like a Notes app where every entry is saved as a big
  * text file.  Raycast handles where it's stored on disk; we just
- * read and write it by name ("songsnap_history").
+ * read and write it by name ("rayzam_history").
  *
  * Capacity: we keep the 500 most recent songs.  Older ones are
  * automatically removed to keep the storage size reasonable.
@@ -25,7 +25,7 @@ import { HistoryEntry } from "../services/types";
 
 // The key under which the whole history array is stored in LocalStorage.
 // Like the label on a folder in a filing cabinet.
-const STORAGE_KEY = "songsnap_history";
+const STORAGE_KEY = "rayzam_history";
 
 export class HistoryDatabase {
   // The in-memory copy of all history entries.
@@ -36,6 +36,9 @@ export class HistoryDatabase {
   // Loading from storage is async (it takes a moment).
   // We store the Promise so every method can "await" the load before doing anything.
   private loadPromise: Promise<void>;
+  // A simple per-instance write queue to serialize writes and avoid overlapping
+  // LocalStorage.setItem calls from concurrent async operations.
+  private writeQueue: Promise<void> = Promise.resolve();
 
   constructor() {
     // Start loading immediately when the object is created
@@ -56,7 +59,11 @@ export class HistoryDatabase {
       if (storedData && typeof storedData === "string") {
         // JSON.parse turns the JSON text back into a real JavaScript array
         this.entries = JSON.parse(storedData);
-        console.log("[HistoryDatabase] Loaded", this.entries.length, "entries from Raycast storage");
+        console.log(
+          "[HistoryDatabase] Loaded",
+          this.entries.length,
+          "entries from Raycast storage"
+        );
       } else {
         this.entries = []; // No history yet — start with an empty list
         console.log("[HistoryDatabase] No existing history found");
@@ -87,10 +94,20 @@ export class HistoryDatabase {
    */
   private async saveEntries(): Promise<void> {
     try {
-      console.log("[HistoryDatabase] Saving", this.entries.length, "entries to Raycast storage...");
-      // JSON.stringify turns the array into a JSON text string
-      await LocalStorage.setItem(STORAGE_KEY, JSON.stringify(this.entries));
-      console.log("[HistoryDatabase] Successfully saved to Raycast storage");
+      console.log(
+        "[HistoryDatabase] Queuing save of",
+        this.entries.length,
+        "entries to Raycast storage..."
+      );
+      // Serialize writes by chaining them on writeQueue. This prevents concurrent
+      // writes from overlapping and reduces the chance of a lost update.
+      this.writeQueue = this.writeQueue.then(async () => {
+        console.log("[HistoryDatabase] Saving entries...");
+        await LocalStorage.setItem(STORAGE_KEY, JSON.stringify(this.entries));
+        console.log("[HistoryDatabase] Successfully saved to Raycast storage");
+      });
+      // Wait for our queued write to complete before returning
+      await this.writeQueue;
     } catch (err) {
       console.error("[HistoryDatabase] Failed to save history:", err);
     }
@@ -106,16 +123,20 @@ export class HistoryDatabase {
    * @param options Optional extra fields (album, year, service, confidence, etc.)
    * @returns       The newly created HistoryEntry (including its generated ID)
    */
-  async addSong(title: string, artist: string, options: Partial<HistoryEntry> = {}): Promise<HistoryEntry> {
+  async addSong(
+    title: string,
+    artist: string,
+    options: Partial<HistoryEntry> = {}
+  ): Promise<HistoryEntry> {
     await this.ensureLoaded(); // Wait for the initial load before we modify anything
 
     const newEntry: HistoryEntry = {
-      id:        uuidv4(),    // Generate a unique receipt-style ID, e.g. "3f2d-8a1b-..."
+      id: uuidv4(), // Generate a unique receipt-style ID, e.g. "3f2d-8a1b-..."
       title,
       artist,
-      timestamp: Date.now(),  // Current time in milliseconds — used for sorting and display
-      service:   "unknown",   // Safe default — will be overwritten by options.service if provided
-      ...options,             // Spread all extra fields; any key here overrides the defaults above
+      timestamp: Date.now(), // Current time in milliseconds — used for sorting and display
+      service: "unknown", // Safe default — will be overwritten by options.service if provided
+      ...options, // Spread all extra fields; any key here overrides the defaults above
       // Because ...options comes LAST, caller's service name beats the "unknown" default.
     };
 
@@ -127,7 +148,11 @@ export class HistoryDatabase {
 
     // Safety limit: if we have more than 500 entries, trim to the newest 500
     if (this.entries.length > 500) {
-      console.log("[HistoryDatabase] Trimming history to 500 songs (current:", this.entries.length, ")");
+      console.log(
+        "[HistoryDatabase] Trimming history to 500 songs (current:",
+        this.entries.length,
+        ")"
+      );
       this.entries = this.entries.slice(0, 500); // Keep index 0–499, discard the rest
     }
 
@@ -160,9 +185,10 @@ export class HistoryDatabase {
     const lower = query.toLowerCase(); // Normalise to lowercase for case-insensitive matching
 
     return this.entries
-      .filter((e) =>
-        // Does the title contain the query?  OR does the artist contain it?
-        e.title.toLowerCase().includes(lower) || e.artist.toLowerCase().includes(lower)
+      .filter(
+        (e) =>
+          // Does the title contain the query?  OR does the artist contain it?
+          e.title.toLowerCase().includes(lower) || e.artist.toLowerCase().includes(lower)
       )
       .slice(0, limit); // Cap results at 'limit'
   }
@@ -196,6 +222,16 @@ export class HistoryDatabase {
     }
     return false; // ID not found
   }
+  /**
+   * clearAll
+   *
+   * Removes every saved history entry.
+   */
+  async clearAll(): Promise<void> {
+    await this.ensureLoaded();
+    this.entries = [];
+    await this.saveEntries();
+  }
 
   /**
    * exportToJSON
@@ -221,7 +257,20 @@ export class HistoryDatabase {
    *   abc-123,"Bohemian Rhapsody","Queen","A Night at the Opera",...
    */
   exportToCSV(): string {
-    const headers = ["ID", "Title", "Artist", "Album", "Release Year", "Service", "Timestamp", "Confidence"];
+    const headers = [
+      "ID",
+      "Title",
+      "Artist",
+      "Album",
+      "Release Year",
+      "Service",
+      "Timestamp",
+      "Confidence",
+      "Spotify ID",
+      "YouTube URL",
+      "Apple Music URL",
+      "Album Art URL",
+    ];
     const csvLines = [headers.join(",")]; // First line is the header row
 
     for (const entry of this.entries) {
@@ -235,6 +284,10 @@ export class HistoryDatabase {
           entry.service,
           entry.timestamp,
           entry.confidence || "",
+          this.escapeCsv(entry.spotifyId || ""),
+          this.escapeCsv(entry.youtubeUrl || ""),
+          this.escapeCsv(entry.appleMusicUrl || ""),
+          this.escapeCsv(entry.albumArtUrl || ""),
         ].join(",")
       );
     }

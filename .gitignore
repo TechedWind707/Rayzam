@@ -1,12 +1,21 @@
-node_modules/
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+
+# Raycast specific files
+raycast-env.d.ts
+.raycast-swift-build
+.swiftpm
+compiled_raycast_swift
+compiled_raycast_rust
 dist/
+
+# local development files
 *.log
-.DS_Store
 .env
 .env.local
 coverage/
-songsnap-debug/
 
-# Keep bundled Chromaprint binaries
-!assets/bin/
-!assets/bin/fpcalc*
+# misc
+.DS_Store

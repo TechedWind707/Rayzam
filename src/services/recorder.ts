@@ -26,14 +26,14 @@
  * ─────────────────────────────────────────────────────────────────
  */
 
-import { exec }         from "child_process"; // Runs shell commands (like typing in a terminal)
-import { promisify }    from "util";           // Wraps callback functions in Promises
-import * as fs          from "fs";             // File system — read, write, delete files
-import * as path        from "path";           // Build file paths that work on any OS
-import * as os          from "os";             // Get info about the operating system
-import { LocalStorage } from "@raycast/api";   // Raycast's key-value storage
+import { exec, type ExecOptions } from "child_process"; // Runs shell commands (like typing in a terminal)
+import { promisify } from "util"; // Wraps callback functions in Promises
+import * as fs from "fs"; // File system — read, write, delete files
+import * as path from "path"; // Build file paths that work on any OS
+import * as os from "os"; // Get info about the operating system
+import { environment, LocalStorage } from "@raycast/api"; // Raycast paths and key-value storage
 import { AudioRecordingError } from "./types";
-import { getPreferences }      from "../utils/preferences";
+import { getPreferences } from "../utils/preferences";
 
 const execAsync = promisify(exec); // Now we can "await" exec() instead of using callbacks
 
@@ -41,21 +41,27 @@ const execAsync = promisify(exec); // Now we can "await" exec() instead of using
 // Think of it like a locker number — both files use the same number to access the same locker
 const SELECTED_DEVICE_KEY = "selectedAudioDevice";
 
+export interface RecordingSession {
+  filePath: string;
+  finished: Promise<string>;
+  stop: () => Promise<void>;
+}
+
 // Shape of the device object stored in LocalStorage
 interface StoredDevice {
-  id:       string; // The device identifier (name on Windows, index on macOS)
-  name:     string; // Human-readable name shown in the UI
+  id: string; // The device identifier (name on Windows, index on macOS)
+  name: string; // Human-readable name shown in the UI
   platform: string; // "win32", "darwin", or "linux" — ensures we only use the right platform's value
 }
 
 export class AudioRecorder {
-  private platform:          string;      // Current OS: "win32", "darwin", "linux"
-  private tempDir:           string;      // Folder where we write the temporary audio file
+  private platform: string; // Current OS: "win32", "darwin", "linux"
+  private tempDir: string; // Folder where we write the temporary audio file
   private cachedAudioDevice: string | null = null; // Saves the auto-detected device so we don't re-run detection every time
 
   constructor() {
     this.platform = process.platform; // e.g. "win32"
-    this.tempDir  = os.tmpdir();      // e.g. "C:\Users\You\AppData\Local\Temp" on Windows
+    this.tempDir = os.tmpdir(); // e.g. "C:\Users\You\AppData\Local\Temp" on Windows
   }
 
   /**
@@ -78,7 +84,11 @@ export class AudioRecorder {
         // Only use the stored value if it's for the current platform
         // (prevents using a Windows device name when running on macOS)
         if (parsed.platform === process.platform && parsed.id) {
-          console.log("[AudioRecorder] Using device from in-app picker:", parsed.id, `(${parsed.name})`);
+          console.log(
+            "[AudioRecorder] Using device from in-app picker:",
+            parsed.id,
+            `(${parsed.name})`
+          );
           return parsed.id;
         }
       }
@@ -121,7 +131,7 @@ export class AudioRecorder {
       // It always "fails" (non-zero exit code) because we didn't give it a real input,
       // so we use .catch() to capture the output anyway
       const result = await execAsync(`ffmpeg -list_devices true -f dshow -i dummy`, {
-        shell:     "cmd.exe",
+        shell: "cmd.exe",
         maxBuffer: 10 * 1024 * 1024,
       }).catch((err) => err);
 
@@ -148,6 +158,20 @@ export class AudioRecorder {
 
       this.cachedAudioDevice = audioDevices[0]; // Use the first device found
       console.log("[AudioRecorder] Selected audio device:", this.cachedAudioDevice);
+      // Invalidate cached device after 5 minutes to handle hardware changes
+      setTimeout(
+        () => {
+          try {
+            if (this.cachedAudioDevice === audioDevices[0]) {
+              console.log("[AudioRecorder] Invalidating cached audio device due to timeout");
+              this.cachedAudioDevice = null;
+            }
+          } catch {
+            // ignore
+          }
+        },
+        5 * 60 * 1000
+      );
       return this.cachedAudioDevice;
     } catch (err) {
       console.error("[AudioRecorder] Failed to detect audio devices:", err);
@@ -169,7 +193,11 @@ export class AudioRecorder {
     try {
       console.log("[AudioRecorder] Recording completed, reading file...");
       const audioBuffer = await fs.promises.readFile(audioFile);
-      console.log("[AudioRecorder] Audio file read successfully, size:", audioBuffer.length, "bytes");
+      console.log(
+        "[AudioRecorder] Audio file read successfully, size:",
+        audioBuffer.length,
+        "bytes"
+      );
       return audioBuffer;
     } finally {
       // 'finally' runs whether the read succeeded or failed
@@ -187,9 +215,125 @@ export class AudioRecorder {
    * @returns         Path to the saved .wav file
    */
   async recordAudioToFile(duration: number = 5): Promise<string> {
+    const session = await this.startRecordingSession(duration);
+    return session.finished;
+  }
+
+  private async saveDebugAudioCopy(audioFile: string): Promise<void> {
+    const prefs = getPreferences();
+    if (!prefs.enableDebugAudio) {
+      return;
+    }
+
+    const fallbackDir = path.join(environment.supportPath, "debug-audio");
+    const preferredDir = prefs.debugAudioDirectory;
+    let debugDir = fallbackDir;
+
+    if (preferredDir) {
+      try {
+        const stats = await fs.promises.stat(preferredDir);
+        if (stats.isDirectory()) {
+          debugDir = preferredDir;
+        } else {
+          console.warn(
+            "[AudioRecorder] Debug audio path is not a directory, using fallback:",
+            preferredDir
+          );
+        }
+      } catch (err) {
+        console.warn("[AudioRecorder] Debug audio directory unavailable, using fallback:", err);
+      }
+    }
+
+    try {
+      await fs.promises.mkdir(debugDir, { recursive: true });
+      const debugFile = path.join(debugDir, `rayzam-${Date.now()}.wav`);
+      await fs.promises.copyFile(audioFile, debugFile);
+      console.log("[AudioRecorder] Debug audio saved to:", debugFile);
+    } catch (debugErr) {
+      console.warn("[AudioRecorder] Failed to save debug audio copy:", debugErr);
+    }
+  }
+
+  private withDebugAudioCopy(session: RecordingSession): RecordingSession {
+    return {
+      ...session,
+      finished: session.finished.then(async (audioFile) => {
+        await this.saveDebugAudioCopy(audioFile);
+        return audioFile;
+      }),
+    };
+  }
+
+  private async isUsableAudioFile(audioFile: string): Promise<boolean> {
+    try {
+      const stats = await fs.promises.stat(audioFile);
+      return stats.isFile() && stats.size > 44;
+    } catch {
+      return false;
+    }
+  }
+
+  private createFriendlyRecordingError(error: unknown): AudioRecordingError {
+    const rawMsg = error instanceof Error ? error.message : String(error);
+
+    let friendlyMsg: string;
+    if (
+      rawMsg.includes("not recognized") ||
+      rawMsg.includes("not found") ||
+      rawMsg.includes("No such file") ||
+      rawMsg.includes("ENOENT")
+    ) {
+      friendlyMsg =
+        "ffmpeg is not installed or could not be found.\n" +
+        "Please install ffmpeg and make sure it is in your system PATH, then try again.";
+    } else if (
+      rawMsg.includes("No such audio input device") ||
+      rawMsg.includes("Could not find audio only device") ||
+      rawMsg.includes("audio=") ||
+      rawMsg.includes("avfoundation") ||
+      rawMsg.includes("pulse") ||
+      rawMsg.includes("dshow")
+    ) {
+      friendlyMsg =
+        "The selected audio input device could not be found.\n" +
+        "Try changing the input device in the Rayzam actions menu, or reset to auto-detect.";
+    } else if (
+      rawMsg.includes("Permission denied") ||
+      rawMsg.includes("EACCES") ||
+      rawMsg.includes("access denied")
+    ) {
+      friendlyMsg =
+        "Microphone access was denied.\n" +
+        "Please grant microphone permission to Raycast in System Settings -> Privacy & Security -> Microphone.";
+    } else if (
+      rawMsg.includes("timeout") ||
+      rawMsg.includes("ETIMEDOUT") ||
+      rawMsg.includes("timed out")
+    ) {
+      friendlyMsg =
+        "Recording timed out.\n" +
+        "Make sure your microphone is connected and working, then try again.";
+    } else if (rawMsg.includes("Unsupported platform")) {
+      friendlyMsg = `Your operating system (${this.platform}) is not supported by Rayzam.`;
+    } else {
+      friendlyMsg =
+        "Recording failed.\n" +
+        "Please check that your microphone is connected and that ffmpeg is installed.";
+    }
+
+    return new AudioRecordingError(friendlyMsg, error instanceof Error ? error : undefined);
+  }
+
+  /**
+   * startRecordingSession
+   *
+   * Starts recording and returns a session object the UI can stop early.
+   */
+  async startRecordingSession(duration: number = 5): Promise<RecordingSession> {
     // Build a unique filename using the current timestamp so multiple recordings
-    // don't overwrite each other — e.g. "C:\Temp\songsnap-1708234567890.wav"
-    const audioFile = path.join(this.tempDir, `songsnap-${Date.now()}.wav`);
+    // don't overwrite each other — e.g. "C:\Temp\rayzam-1708234567890.wav"
+    const audioFile = path.join(this.tempDir, `rayzam-${Date.now()}.wav`);
 
     console.log("[AudioRecorder] Starting recording for", duration, "seconds");
     console.log(process.cwd());
@@ -200,35 +344,16 @@ export class AudioRecorder {
       // Route to the correct OS-specific recording method
       if (this.platform === "darwin") {
         console.log("[AudioRecorder] Using macOS recording mode");
-        await this.recordMacOS(audioFile, duration);
+        return this.withDebugAudioCopy(await this.recordMacOS(audioFile, duration));
       } else if (this.platform === "win32") {
         console.log("[AudioRecorder] Using Windows recording mode");
-        await this.recordWindows(audioFile, duration);
+        return this.withDebugAudioCopy(await this.recordWindows(audioFile, duration));
       } else if (this.platform === "linux") {
         console.log("[AudioRecorder] Using Linux recording mode");
-        await this.recordLinux(audioFile, duration);
+        return this.withDebugAudioCopy(await this.recordLinux(audioFile, duration));
       } else {
         throw new AudioRecordingError(`Unsupported platform: ${this.platform}`);
       }
-
-      // ── DEBUG: save a copy so you can listen to what was recorded ────────
-      // This helps diagnose problems: if the file is silent, the wrong
-      // microphone was used; if it's garbled, it's a format issue, etc.
-      try {
-        const debugDir = "C:\\Coding\\Raycast\\SongSnap\\raycast-songsnap\\songsnap-debug";
-        if (!fs.existsSync(debugDir)) {
-          fs.mkdirSync(debugDir, { recursive: true });
-        }
-        const debugFile = path.join(debugDir, `songsnap-${Date.now()}.wav`);
-        await fs.promises.copyFile(audioFile, debugFile);
-        console.log("[AudioRecorder] ✓ DEBUG: Saved audio copy to:", debugFile);
-        console.log("[AudioRecorder] ✓ DEBUG: You can listen to this file to verify audio is being captured");
-      } catch (debugErr) {
-        console.warn("[AudioRecorder] Failed to save debug copy:", debugErr);
-      }
-
-      return audioFile;
-
     } catch (error) {
       const rawMsg = error instanceof Error ? error.message : String(error);
       console.error("[AudioRecorder] Recording error:", rawMsg);
@@ -237,45 +362,49 @@ export class AudioRecorder {
       // Re-throw our own errors unchanged
       if (error instanceof AudioRecordingError) throw error;
 
-      // Map common ffmpeg / system error patterns to plain-English messages
-      let friendlyMsg: string;
-      if (
-        rawMsg.includes("not recognized") ||
-        rawMsg.includes("not found") ||
-        rawMsg.includes("No such file") ||
-        rawMsg.includes("ENOENT")
-      ) {
-        friendlyMsg =
-          "ffmpeg is not installed or could not be found.\n" +
-          "Please install ffmpeg and make sure it is in your system PATH, then try again.";
-      } else if (
-        rawMsg.includes("No such audio input device") ||
-        rawMsg.includes("audio=") ||
-        rawMsg.includes("avfoundation") ||
-        rawMsg.includes("pulse") ||
-        rawMsg.includes("dshow")
-      ) {
-        friendlyMsg =
-          "The selected audio input device could not be found.\n" +
-          "Try changing the input device in the SongSnap actions menu, or reset to auto-detect.";
-      } else if (rawMsg.includes("Permission denied") || rawMsg.includes("EACCES") || rawMsg.includes("access denied")) {
-        friendlyMsg =
-          "Microphone access was denied.\n" +
-          "Please grant microphone permission to Raycast in System Settings → Privacy & Security → Microphone.";
-      } else if (rawMsg.includes("timeout") || rawMsg.includes("ETIMEDOUT") || rawMsg.includes("timed out")) {
-        friendlyMsg =
-          "Recording timed out.\n" +
-          "Make sure your microphone is connected and working, then try again.";
-      } else if (rawMsg.includes("Unsupported platform")) {
-        friendlyMsg = `Your operating system (${this.platform}) is not supported by SongSnap.`;
-      } else {
-        friendlyMsg =
-          "Recording failed.\n" +
-          "Please check that your microphone is connected and that ffmpeg is installed.";
-      }
-
-      throw new AudioRecordingError(friendlyMsg, error instanceof Error ? error : undefined);
+      throw this.createFriendlyRecordingError(error);
     }
+  }
+
+  private createRecordingSession(
+    command: string,
+    options: ExecOptions,
+    outputFile: string
+  ): RecordingSession {
+    let child: ReturnType<typeof exec> | null = null;
+    let stopRequested = false;
+    let settled = false;
+
+    const finished = new Promise<string>((resolve, reject) => {
+      child = exec(command, options, async (error) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+
+        if (!error || stopRequested || (await this.isUsableAudioFile(outputFile))) {
+          resolve(outputFile);
+          return;
+        }
+
+        reject(this.createFriendlyRecordingError(error));
+      });
+    });
+
+    return {
+      filePath: outputFile,
+      finished,
+      stop: async () => {
+        if (settled || stopRequested) {
+          return;
+        }
+
+        stopRequested = true;
+        child?.kill("SIGINT");
+        await finished.catch(() => undefined);
+      },
+    };
   }
 
   /**
@@ -298,22 +427,24 @@ export class AudioRecorder {
    * On macOS we first try "sox" (a simpler audio tool that just works
    * with the system default mic), and fall back to ffmpeg if sox isn't installed.
    */
-  private async recordMacOS(outputFile: string, duration: number): Promise<void> {
+  private async recordMacOS(outputFile: string, duration: number): Promise<RecordingSession> {
     const preferredDevice = await this.getPreferredDevice();
 
     // If no specific device was selected, try sox first — it picks the system default
     if (!preferredDevice) {
       console.log("[AudioRecorder] Attempting sox recording...");
-      try {
+      const soxAvailable = await execAsync(`sox --version`, { timeout: 5000 })
+        .then(() => true)
+        .catch(() => false);
+      if (soxAvailable) {
         // sox -d = use default device
         // -t wav = output as WAV
         // trim 0 N = record from second 0 to second N
         const cmd = `sox -d -t wav "${outputFile}" trim 0 ${duration}`;
         console.log("[AudioRecorder] Executing command:", cmd);
-        await execAsync(cmd, { timeout: (duration + 5) * 1000 });
-        console.log("[AudioRecorder] Sox recording successful");
-        return; // Done — no need to try ffmpeg
-      } catch {
+        console.log("[AudioRecorder] Sox recording started");
+        return this.createRecordingSession(cmd, { timeout: (duration + 5) * 1000 }, outputFile);
+      } else {
         console.log("[AudioRecorder] Sox failed, falling back to ffmpeg...");
       }
     }
@@ -323,12 +454,16 @@ export class AudioRecorder {
     // ":0" means "audio device 0", ":1" means "audio device 1", etc.
     // ":default" works when nothing is specified
     const audioInput = preferredDevice ? `:${preferredDevice}` : ":default";
-    console.log("[AudioRecorder] Using avfoundation input:", audioInput, preferredDevice ? "(user-selected)" : "(system default)");
+    console.log(
+      "[AudioRecorder] Using avfoundation input:",
+      audioInput,
+      preferredDevice ? "(user-selected)" : "(system default)"
+    );
 
     const cmd = `ffmpeg -f avfoundation -i "${audioInput}" -t ${duration} "${outputFile}" -y`;
     console.log("[AudioRecorder] Executing ffmpeg command:", cmd);
-    await execAsync(cmd, { timeout: (duration + 5) * 1000 });
-    console.log("[AudioRecorder] FFmpeg recording successful");
+    console.log("[AudioRecorder] FFmpeg recording started");
+    return this.createRecordingSession(cmd, { timeout: (duration + 5) * 1000 }, outputFile);
   }
 
   /**
@@ -340,7 +475,7 @@ export class AudioRecorder {
    * The device name must match exactly what Windows calls it, e.g.:
    *   audio="Microphone (Realtek Audio)"
    */
-  private async recordWindows(outputFile: string, duration: number): Promise<void> {
+  private async recordWindows(outputFile: string, duration: number): Promise<RecordingSession> {
     console.log("[AudioRecorder] Recording on Windows with ffmpeg...");
 
     // Windows paths use backslashes, but we need to double them inside a string
@@ -349,8 +484,12 @@ export class AudioRecorder {
 
     // Get user-selected device, or auto-detect if none
     const preferredDevice = await this.getPreferredDevice();
-    const audioDevice     = preferredDevice ?? (await this.detectWindowsAudioDevice());
-    console.log("[AudioRecorder] Using audio device:", audioDevice, preferredDevice ? "(user-selected)" : "(auto-detected)");
+    const audioDevice = preferredDevice ?? (await this.detectWindowsAudioDevice());
+    console.log(
+      "[AudioRecorder] Using audio device:",
+      audioDevice,
+      preferredDevice ? "(user-selected)" : "(auto-detected)"
+    );
 
     // Build the ffmpeg command:
     //   -f dshow           = use DirectShow (Windows audio)
@@ -363,12 +502,16 @@ export class AudioRecorder {
     const cmd = `ffmpeg -f dshow -i audio="${audioDevice}" -t ${duration} -acodec pcm_s16le -ar 44100 -ac 1 -y "${escapedPath}"`;
     console.log("[AudioRecorder] Executing command:", cmd);
 
-    await execAsync(cmd, {
-      timeout:   (duration + 5) * 1000,
-      shell:     "cmd.exe",          // Use the classic Windows command prompt
-      maxBuffer: 10 * 1024 * 1024,   // Allow up to 10 MB of output from ffmpeg
-    });
-    console.log("[AudioRecorder] Windows recording successful");
+    console.log("[AudioRecorder] Windows recording started");
+    return this.createRecordingSession(
+      cmd,
+      {
+        timeout: (duration + 5) * 1000,
+        shell: "cmd.exe", // Use the classic Windows command prompt
+        maxBuffer: 10 * 1024 * 1024, // Allow up to 10 MB of output from ffmpeg
+      },
+      outputFile
+    );
   }
 
   /**
@@ -378,18 +521,21 @@ export class AudioRecorder {
    * most desktop distros), and fall back to ALSA (the lower-level system)
    * if PulseAudio isn't available.
    */
-  private async recordLinux(outputFile: string, duration: number): Promise<void> {
+  private async recordLinux(outputFile: string, duration: number): Promise<RecordingSession> {
     const preferredDevice = await this.getPreferredDevice();
-    const deviceId        = preferredDevice || "default"; // PulseAudio's "default" = system default mic
+    const deviceId = preferredDevice || "default"; // PulseAudio's "default" = system default mic
 
-    console.log("[AudioRecorder] Attempting pulse audio recording...", preferredDevice ? `(user-selected: ${deviceId})` : "(default)");
+    console.log(
+      "[AudioRecorder] Attempting pulse audio recording...",
+      preferredDevice ? `(user-selected: ${deviceId})` : "(default)"
+    );
 
     try {
       // -f pulse = PulseAudio input
       const cmd = `ffmpeg -f pulse -i "${deviceId}" -t ${duration} "${outputFile}" -y`;
       console.log("[AudioRecorder] Executing command:", cmd);
-      await execAsync(cmd, { timeout: (duration + 5) * 1000 });
-      console.log("[AudioRecorder] Pulse audio recording successful");
+      console.log("[AudioRecorder] Pulse audio recording started");
+      return this.createRecordingSession(cmd, { timeout: (duration + 5) * 1000 }, outputFile);
     } catch {
       // PulseAudio failed — try ALSA instead
       console.log("[AudioRecorder] Pulse failed, trying ALSA...");
@@ -397,8 +543,8 @@ export class AudioRecorder {
       // -f alsa = ALSA input (Advanced Linux Sound Architecture)
       const cmd = `ffmpeg -f alsa -i "${deviceId}" -t ${duration} "${outputFile}" -y`;
       console.log("[AudioRecorder] Executing ALSA command:", cmd);
-      await execAsync(cmd, { timeout: (duration + 5) * 1000 });
-      console.log("[AudioRecorder] ALSA recording successful");
+      console.log("[AudioRecorder] ALSA recording started");
+      return this.createRecordingSession(cmd, { timeout: (duration + 5) * 1000 }, outputFile);
     }
   }
 }

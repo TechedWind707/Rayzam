@@ -18,7 +18,7 @@
 import { getPreferenceValues } from "@raycast/api";
 
 // Import the enum so we can refer to services by name, not raw strings
-import { RecognitionServiceType } from "../services/types";
+import { PostMatchAction, RecognitionServiceType } from "../services/types";
 
 // ─── The shape of the settings object ────────────────────────────────────────
 //
@@ -28,13 +28,20 @@ import { RecognitionServiceType } from "../services/types";
 //
 export interface Preferences {
   service: RecognitionServiceType; // Which recognition engine to use
-  recordingDuration: number;       // How many seconds to record (3–15)
-  inputDevice?: string;            // Name of a specific mic — blank means auto-detect
-  auddApiKey?: string;             // API key for AudD (only needed if using AudD)
-  acrcloudAccessKey?: string;      // Access key for ACRCloud
-  acrcloudAccessSecret?: string;   // Secret for ACRCloud (like a password paired with the key)
-  acrcloudHost?: string;           // ACRCloud server address (varies by region)
-  acoustIdApiKey?: string;         // Optional personal AcoustID key (a free shared key is used otherwise)
+  recordingDuration: number; // How many seconds to record (10–30)
+  postMatchAction: PostMatchAction; // What to do after a song is found
+  enableDebugAudio: boolean; // Whether to keep a debug copy of recordings
+  debugAudioDirectory?: string; // Folder for optional debug recordings
+  enableDebugJson: boolean; // Whether to save raw provider JSON responses
+  debugJsonDirectory?: string; // Folder for optional provider JSON responses
+  saveAlternativeMatches: boolean; // Whether to store secondary provider candidates
+  inputDevice?: string; // Name of a specific mic — blank means auto-detect
+  auddApiKey?: string; // API key for AudD (only needed if using AudD)
+  acrcloudAccessKey?: string; // Access key for ACRCloud
+  acrcloudAccessSecret?: string; // Secret for ACRCloud (like a password paired with the key)
+  acrcloudHost?: string; // ACRCloud server address (varies by region)
+  acrcloudMetadataToken?: string; // Optional Bearer token for ACRCloud's Metadata API
+  acrcloudMetadataHost?: string; // Optional Metadata API host
 }
 
 /**
@@ -53,12 +60,22 @@ export function getPreferences(): Preferences {
 
   // Build a clean, normalised copy with defaults applied
   const preferences: Preferences = {
-    // If the user never set a service, default to Chromaprint (free)
-    service: prefs.service || RecognitionServiceType.CHROMAPRINT,
+    // If the user never set a service, default to ACRCloud
+    service: prefs.service || RecognitionServiceType.ACRCLOUD,
 
     // Raycast returns all preference values as strings, even numbers,
     // so we must convert with Number().  If somehow it's empty, default to 15 seconds.
     recordingDuration: Number(prefs.recordingDuration) || 15,
+
+    // Default to showing the result details, which matches the current behavior.
+    postMatchAction: prefs.postMatchAction || PostMatchAction.DETAILS,
+
+    // Debug audio is opt-in because recordings may contain private ambient audio.
+    enableDebugAudio: Boolean(prefs.enableDebugAudio),
+    debugAudioDirectory: prefs.debugAudioDirectory?.trim() || undefined,
+    enableDebugJson: Boolean(prefs.enableDebugJson),
+    debugJsonDirectory: prefs.debugJsonDirectory?.trim() || undefined,
+    saveAlternativeMatches: Boolean(prefs.saveAlternativeMatches),
 
     // Trim any accidental spaces the user may have typed; if blank → undefined (= auto-detect)
     inputDevice: prefs.inputDevice?.trim() || undefined,
@@ -67,19 +84,26 @@ export function getPreferences(): Preferences {
     auddApiKey: prefs.auddApiKey,
     acrcloudAccessKey: prefs.acrcloudAccessKey,
     acrcloudAccessSecret: prefs.acrcloudAccessSecret,
-    acrcloudHost: prefs.acrcloudHost,
-    acoustIdApiKey: prefs.acoustIdApiKey,
+    acrcloudHost: prefs.acrcloudHost?.trim() || undefined,
+    acrcloudMetadataToken: prefs.acrcloudMetadataToken,
+    acrcloudMetadataHost: prefs.acrcloudMetadataHost?.trim() || undefined,
   };
 
   // Log a summary (without logging actual secret keys — security 101)
   console.log("[Preferences] Loaded:", {
     service: preferences.service,
     duration: preferences.recordingDuration,
+    postMatchAction: preferences.postMatchAction,
+    enableDebugAudio: preferences.enableDebugAudio,
+    debugAudioDirectory: preferences.debugAudioDirectory || "(Raycast support folder)",
+    enableDebugJson: preferences.enableDebugJson,
+    debugJsonDirectory: preferences.debugJsonDirectory || "(Raycast support folder)",
+    saveAlternativeMatches: preferences.saveAlternativeMatches,
     inputDevice: preferences.inputDevice || "(auto-detect)",
-    hasAuddKey: !!preferences.auddApiKey,          // !! converts a value to true/false
+    hasAuddKey: !!preferences.auddApiKey, // !! converts a value to true/false
     hasACRCloudKey: !!preferences.acrcloudAccessKey,
     hasACRCloudSecret: !!preferences.acrcloudAccessSecret,
-    hasAcoustIdKey: !!preferences.acoustIdApiKey,
+    hasACRCloudMetadataToken: !!preferences.acrcloudMetadataToken,
   });
 
   return preferences;
@@ -97,12 +121,12 @@ export function getPreferences(): Preferences {
 export function validatePreferences(prefs: Preferences): string | null {
   console.log("[Preferences] Validating preferences...");
 
-  // Recording duration must be between 3 and 15 seconds.
+  // Recording duration must be between 10 and 30 seconds.
   // Too short = not enough audio to fingerprint.
   // Too long = slow and wastes time.
-  if (prefs.recordingDuration < 3 || prefs.recordingDuration > 15) {
+  if (prefs.recordingDuration < 10 || prefs.recordingDuration > 30) {
     console.error("[Preferences] Invalid recording duration:", prefs.recordingDuration);
-    return "Recording duration must be between 3 and 15 seconds";
+    return "Recording duration must be between 10 and 30 seconds";
   }
 
   console.log("[Preferences] Validation passed");
