@@ -19,3 +19,4 @@ module.exports = {
     }
   }
 };
+//jest configuration for Rayzam tests
