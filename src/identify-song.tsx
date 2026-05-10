@@ -471,15 +471,12 @@ export default function IdentifySongCommand() {
 
             {/* Settings section — visible when the user opens Actions with ⌘K */}
             <ActionPanel.Section title="Settings">
-              {/* Raycast's title-case lint does not understand ACRCloud/AudD brand casing. */}
               <Action
-                // eslint-disable-next-line @raycast/prefer-title-case
                 title="Use ACRCloud"
                 icon={selectedService === RecognitionServiceType.ACRCLOUD ? Icon.CheckCircle : Icon.Circle}
                 onAction={() => chooseRecognitionService(RecognitionServiceType.ACRCLOUD)}
               />
               <Action
-                // eslint-disable-next-line @raycast/prefer-title-case
                 title="Use AudD"
                 icon={selectedService === RecognitionServiceType.AUDD ? Icon.CheckCircle : Icon.Circle}
                 onAction={() => chooseRecognitionService(RecognitionServiceType.AUDD)}
