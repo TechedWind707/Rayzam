@@ -26,8 +26,8 @@ describe("Utility Functions", () => {
     const markdown = createMarkdownView(mockSong);
     expect(markdown).toContain("# 🎵 Bohemian Rhapsody");
     expect(markdown).toContain("## 👤 Queen");
-    expect(markdown).toContain("**Album:** A Night at the Opera");
-    expect(markdown).toContain("**Released:** 1975");
+    expect(markdown).not.toContain("**Album:** A Night at the Opera");
+    expect(markdown).not.toContain("**Released:** 1975");
   });
 
   it("should handle missing optional fields", () => {

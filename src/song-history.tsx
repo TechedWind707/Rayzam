@@ -21,6 +21,7 @@
 
 import React from "react";
 import {
+  Detail,
   List, // Renders a searchable, scrollable list
   ActionPanel, // Container for ⌘K actions
   Action, // A single action item
@@ -28,8 +29,7 @@ import {
   showToast, // Brief pop-up notification
   Toast, // Toast type definitions
   Clipboard, // Lets us copy text to the system clipboard
-  Alert,
-  confirmAlert,
+  popToRoot,
 } from "@raycast/api";
 import { useState, useEffect, useRef } from "react";
 import { HistoryDatabase } from "./storage/database";
@@ -175,6 +175,20 @@ export default function SongHistoryCommand() {
     return [headers.join(","), ...rows].join("\n");
   }
 
+  function filterSongsForSearch(entries: HistoryEntry[], query: string): HistoryEntry[] {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return entries;
+    }
+
+    return entries.filter(
+      (song) =>
+        song.title.toLowerCase().includes(normalizedQuery) ||
+        song.artist.toLowerCase().includes(normalizedQuery)
+    );
+  }
+
   function HistoryManagementActions() {
     return (
       <ActionPanel.Section title="History">
@@ -188,11 +202,10 @@ export default function SongHistoryCommand() {
           icon={Icon.Download}
           onAction={() => exportHistory("csv")}
         />
-        <Action
+        <Action.Push
           title="Clear Song History"
           icon={Icon.Trash}
-          style={Action.Style.Destructive}
-          onAction={clearHistory}
+          target={<ClearHistoryConfirmation onConfirm={clearHistory} />}
         />
       </ActionPanel.Section>
     );
@@ -211,9 +224,7 @@ export default function SongHistoryCommand() {
         // Filter the deleted song out of both the full list and the filtered list
         const updated = songs.filter((s) => s.id !== id);
         setSongs(updated);
-        setFilteredSongs(
-          updated.filter((s) => s.title.toLowerCase().includes(searchText.toLowerCase()))
-        );
+        setFilteredSongs(filterSongsForSearch(updated, searchText));
         await showToast({ style: Toast.Style.Success, title: "✓ Song deleted" });
       }
     } catch (err) {
@@ -225,19 +236,6 @@ export default function SongHistoryCommand() {
     }
   }
   async function clearHistory(): Promise<void> {
-    const confirmed = await confirmAlert({
-      title: "Clear Song History?",
-      message: "This removes every saved song from Rayzam history. This cannot be undone.",
-      primaryAction: {
-        title: "Clear History",
-        style: Alert.ActionStyle.Destructive,
-      },
-    });
-
-    if (!confirmed) {
-      return;
-    }
-
     try {
       const db = new HistoryDatabase();
       await db.clearAll();
@@ -377,6 +375,32 @@ export default function SongHistoryCommand() {
         );
       })}
     </List>
+  );
+}
+
+function ClearHistoryConfirmation({ onConfirm }: { onConfirm: () => Promise<void> }) {
+  async function confirmClearHistory(): Promise<void> {
+    await onConfirm();
+    popToRoot({ clearSearchBar: true });
+  }
+
+  return (
+    <Detail
+      markdown={
+        "# Clear Song History?\n\nThis removes every saved song from Rayzam history.\n\nThis cannot be undone."
+      }
+      actions={
+        <ActionPanel>
+          <Action
+            title="Clear History"
+            icon={Icon.Trash}
+            style={Action.Style.Destructive}
+            onAction={confirmClearHistory}
+          />
+          <Action title="Cancel" icon={Icon.ArrowLeft} onAction={() => popToRoot()} />
+        </ActionPanel>
+      }
+    />
   );
 }
 

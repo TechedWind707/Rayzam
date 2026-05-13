@@ -211,6 +211,8 @@ export class HistoryDatabase {
    * Returns true if the entry was found and deleted, false if not found.
    */
   async deleteSong(id: string): Promise<boolean> {
+    await this.ensureLoaded();
+
     // findIndex returns the position of the matching item, or -1 if not found
     const idx = this.entries.findIndex((e) => e.id === id);
 

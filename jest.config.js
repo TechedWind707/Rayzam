@@ -1,6 +1,15 @@
 module.exports = {
-  preset: "ts-jest",
   testEnvironment: "node",
+  transform: {
+    "^.+\\.tsx?$": [
+      "ts-jest",
+      {
+        tsconfig: {
+          types: ["node", "jest"],
+        },
+      },
+    ],
+  },
   roots: ["<rootDir>/src"],
   testMatch: ["**/__tests__/**/*.ts", "**/?(*.)+(spec|test).ts"],
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json"],
@@ -19,4 +28,3 @@ module.exports = {
     }
   }
 };
-//jest configuration for Rayzam tests
